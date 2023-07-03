@@ -1,0 +1,1 @@
+table_add srv6_table srv6_noop c3::e2/128 => 2

@@ -1,0 +1,1 @@
+table_add srv6_table srv6_seg_ep c4::e2/64 => 2

@@ -1,0 +1,7 @@
+ip link set eth0 address 00:00:00:e2:c3:00
+ip link set eth1 address 00:00:00:e2:c4:00
+ip link set eth2 address 00:00:00:e2:0b:00
+
+ip addr add b::1/64 dev eth2
+
+
