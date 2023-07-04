@@ -1,7 +1,7 @@
 ip link set eth0 address 00:00:00:c4:c2:00
 ip link set eth1 address 00:00:00:c4:e2:00
 
-ip addr add c4::1/64 dev eth0
+ip addr add c4::e2/64 dev eth0
 
 make all
 simple_switch -i 1@eth0 -i 2@eth1 /build/srv6_forward.json &

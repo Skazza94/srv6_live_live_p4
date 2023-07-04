@@ -2,8 +2,6 @@ ip link set eth0 address 00:00:00:e1:0a:00
 ip link set eth1 address 00:00:00:e1:c1:00
 ip link set eth2 address 00:00:00:e1:c2:00
 
-ip addr add a::1/64 dev eth0
-
 make all
 simple_switch -i 1@eth0 -i 2@eth1 -i 3@eth2 /build/srv6_livelive.json &
 

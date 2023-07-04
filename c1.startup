@@ -1,12 +1,10 @@
 ip link set eth0 address 00:00:00:c1:e1:00
+ip link set eth0 promisc on
 ip link set eth1 address 00:00:00:c1:c3:00
+ip link set eth1 promisc on
 
 ip addr add c3::2/64 dev eth1
 
-make all
-simple_switch -i 1@eth0 -i 2@eth1 /build/srv6_forward.json &
+ip -6 route add c3::e2 encap seg6local action End dev eth1
 
-while [[ $(pgrep simple_switch) -eq 0 ]]; do sleep 1; done
-until simple_switch_CLI <<< "help"; do sleep 1; done
-
-simple_switch_CLI <<< $(cat commands.txt)
+ip neigh add c3::e2 lladdr 00:00:00:c3:c1:00 dev eth1 nud permanent

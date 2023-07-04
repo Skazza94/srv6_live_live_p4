@@ -11,6 +11,10 @@ control IngressPipe(inout headers hdr,
                     inout metadata meta,
                     inout standard_metadata_t standard_metadata) {
     action encapsulate_srv6(bit<128> src_addr) {
+        bit<16> original_len = hdr.ipv6.payload_len;
+        bit<8> original_next_hdr = hdr.ipv6.next_hdr;
+        bit<128> original_src_addr = hdr.ipv6.src_addr;
+
         // SRv6 Encapsulation
         hdr.ipv6.payload_len = hdr.ipv6.payload_len + hdr.ipv6_inner.minSizeInBytes() + hdr.srv6.minSizeInBytes();
         hdr.ipv6.next_hdr = PROTO_SRV6;
@@ -29,10 +33,10 @@ control IngressPipe(inout headers hdr,
         hdr.ipv6_inner.version = 6;
         hdr.ipv6_inner.traffic_class = hdr.ipv6.traffic_class;
         hdr.ipv6_inner.flow_label = hdr.ipv6.flow_label;
-        hdr.ipv6_inner.payload_len = hdr.ipv6.payload_len;
-        hdr.ipv6_inner.next_hdr = hdr.ipv6.next_hdr;
+        hdr.ipv6_inner.payload_len = original_len;
+        hdr.ipv6_inner.next_hdr = original_next_hdr;
         hdr.ipv6_inner.hop_limit = hdr.ipv6.hop_limit;
-        hdr.ipv6_inner.src_addr = hdr.ipv6.src_addr;
+        hdr.ipv6_inner.src_addr = original_src_addr;
         hdr.ipv6_inner.dst_addr = hdr.ipv6.dst_addr;
     }
 
@@ -91,12 +95,13 @@ control EgressPipe(inout headers hdr,
         hdr.srv6.segment_left = hdr.srv6.segment_left + 1;
         hdr.srv6.last_entry = hdr.srv6.last_entry + 1;
 
-        hdr.srv6_ll_tlv.setValid();
+        /* hdr.srv6_ll_tlv.setValid();
         hdr.srv6_ll_tlv.type = 0xff;
         hdr.srv6_ll_tlv.len = 0x06;
         hash(hdr.srv6_ll_tlv.flow_id, HashAlgorithm.crc32, (bit<1>) 0, {hdr.ipv6_inner.src_addr, hdr.ipv6_inner.dst_addr, meta.l4_lookup.src_port, meta.l4_lookup.dst_port, hdr.ipv6_inner.next_hdr}, (bit<32>) 0xffffffff);
+        */
 
-        hdr.ipv6.payload_len = hdr.ipv6.payload_len + hdr.srv6_list[0].minSizeInBytes() + hdr.srv6_ll_tlv.minSizeInBytes();
+        hdr.ipv6.payload_len = hdr.ipv6.payload_len + hdr.srv6_list[0].minSizeInBytes();
 
         hdr.srv6.hdr_ext_len = hdr.srv6.hdr_ext_len + 2;
     }
