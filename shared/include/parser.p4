@@ -98,6 +98,7 @@ parser PktParser(packet_in packet,
 
 control PktDeparser(packet_out packet, in headers hdr) {
     apply {
+        packet.emit(hdr.bridge);
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv6);
         packet.emit(hdr.srv6);

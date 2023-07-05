@@ -64,6 +64,10 @@ header udp_h {
     bit<16> checksum;
 }
 
+header bridge_h {
+    bit<16> seq_n;
+}
+
 struct metadata {
     bit<8> ip_proto;
     ipv6_addr_t next_srv6_sid;
@@ -71,6 +75,7 @@ struct metadata {
 }
 
 struct headers {
+    bridge_h bridge;
     ethernet_h ethernet;
     ipv6_h ipv6;
     srv6_h srv6;

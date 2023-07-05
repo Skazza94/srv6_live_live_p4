@@ -11,11 +11,11 @@ control IngressPipe(inout headers hdr,
                     inout metadata meta,
                     inout standard_metadata_t standard_metadata) {
     action srv6_noop(bit<9> egress_port) {
-        standard_metadata.egress_port = egress_port;
+        standard_metadata.egress_spec = egress_port;
     }
 
     action srv6_seg_ep(bit<9> egress_port) {
-        standard_metadata.egress_port = egress_port;
+        standard_metadata.egress_spec = egress_port;
     }
 
     table srv6_table {
