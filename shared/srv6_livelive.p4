@@ -203,6 +203,7 @@ control EgressPipe(inout headers hdr,
         hdr.srv6_ll_tlv.len = 0x06;
         hash(hdr.srv6_ll_tlv.flow_id, HashAlgorithm.crc32, (bit<1>) 0, {hdr.ipv6_inner.src_addr, hdr.ipv6_inner.dst_addr, meta.l4_lookup.src_port, meta.l4_lookup.dst_port, hdr.ipv6_inner.next_hdr}, (bit<32>) MAX_NUM_FLOWS);
         hdr.srv6_ll_tlv.seq_n = hdr.bridge.seq_n;
+        hdr.meta.seq_n = hdr.bridge.seq_n;
         hdr.bridge.setInvalid();
 
         hdr.ipv6.payload_len = hdr.ipv6.payload_len + hdr.srv6_list[0].minSizeInBytes() + hdr.srv6_ll_tlv.minSizeInBytes();

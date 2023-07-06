@@ -86,12 +86,17 @@ parser PktParser(packet_in packet,
     state parse_tcp {
         packet.extract(hdr.tcp);
         meta.l4_lookup = {hdr.tcp.src_port, hdr.tcp.dst_port};
-        transition accept;
+        transition parse_meta;
     }
 
     state parse_udp {
         packet.extract(hdr.udp);
         meta.l4_lookup = {hdr.udp.src_port, hdr.udp.dst_port};
+        transition parse_meta;
+    }
+
+    state parse_meta {
+        packet.extract(hdr.meta);
         transition accept;
     }
 }
@@ -107,6 +112,7 @@ control PktDeparser(packet_out packet, in headers hdr) {
         packet.emit(hdr.ipv6_inner);
         packet.emit(hdr.tcp);
         packet.emit(hdr.udp);
+        packet.emit(hdr.meta);
     }
 }
 

@@ -1,1 +1,2 @@
 table_add srv6_table srv6_noop c3::e2/128 => 2
+table_add srv6_table srv6_seg_ep c1::e1/64 => 1

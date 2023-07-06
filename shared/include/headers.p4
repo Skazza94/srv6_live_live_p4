@@ -64,6 +64,10 @@ header udp_h {
     bit<16> checksum;
 }
 
+header meta_h {
+    bit<16> seq_n;
+}
+
 header bridge_h {
     bit<16> seq_n;
 }
@@ -84,6 +88,7 @@ struct headers {
     ipv6_h ipv6_inner;
     tcp_h tcp;
     udp_h udp;
+    meta_h meta;
 }
 
 #endif
