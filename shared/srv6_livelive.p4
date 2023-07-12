@@ -150,6 +150,8 @@ control IngressPipe(inout headers hdr,
                         log_msg("Dropping packet of flow {} with index {}", {hdr.srv6_ll_tlv.flow_id, hdr.srv6_ll_tlv.seq_n});
                         mark_to_drop(standard_metadata);
                     } else {
+                        log_msg("Forwarding packet of flow {} with index {}", {hdr.srv6_ll_tlv.flow_id, hdr.srv6_ll_tlv.seq_n});
+
                         curr_bitmap = curr_bitmap | idx_bitmask;
                         flow_to_bitmap.write(hdr.srv6_ll_tlv.flow_id, curr_bitmap);
 

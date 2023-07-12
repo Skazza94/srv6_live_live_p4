@@ -27,9 +27,9 @@ def main():
     addr = sys.argv[1]
     iface = sys.argv[2]
 
-    pkt = Ether(src=get_if_hwaddr(iface), dst='00:00:00:e1:0a:00')
+    pkt = Ether(src=get_if_hwaddr(iface), dst='00:00:00:e2:0b:00')
     pkt = pkt / IPv6(dst=addr) / UDP(dport=random.randint(5000, 60000), sport=random.randint(49152, 65535)) / LiveLiveSeqN(seq_n=0xffff)
-    srploop(pkt, iface=iface, inter=0.1)
+    srploop(pkt, iface=iface, inter=1)
 
 
 if __name__ == '__main__':
