@@ -99,8 +99,9 @@ control IngressPipe(inout headers hdr,
         size = MAX_NUM_ENTRIES;
     }
 
-    action forward(bit<9> egress_port) {
+    action forward(bit<9> egress_port, bit<48> mac_dst) {
         standard_metadata.egress_spec = egress_port;
+        hdr.ethernet.dst_addr = mac_dst;
     }
 
     table ipv6_forward {

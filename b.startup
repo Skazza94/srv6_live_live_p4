@@ -1,5 +1,7 @@
-ip link set eth0 address 00:00:00:e2:0b:00
+ip link set eth0 address 00:00:00:0b:e2:00
 
 ip addr add b::2/64 dev eth0
 
 ip route add default via b::1 dev eth0
+
+ip -6 neigh add b::1 lladdr 00:00:00:e2:0b:00 dev eth0
