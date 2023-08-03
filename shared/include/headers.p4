@@ -57,6 +57,58 @@ header tcp_h {
     bit<16> urgent_ptr;
 }
 
+header tcp_option_end_h {
+    bit<8> kind;
+}
+
+header tcp_option_nop_h {
+    bit<8> kind;
+}
+
+header tcp_option_ss_h {
+    bit<8>  kind;
+    bit<32> maxSegmentSize;
+}
+
+header tcp_option_s_h {
+    bit<8>  kind;
+    bit<24> scale;
+}
+
+header tcp_option_sack_h {
+    bit<8>         kind;
+    bit<8>         length;
+    varbit<256>    sack;
+}
+
+header_union tcp_option_h {
+    tcp_option_end_h  end;
+    tcp_option_nop_h  nop;
+    tcp_option_ss_h   ss;
+    tcp_option_s_h    s;
+    tcp_option_sack_h sack;
+}
+
+// Defines a stack of 10 tcp options
+typedef tcp_option_h[10] tcp_option_stack;
+
+header tcp_option_padding_h {
+    varbit<256> padding;
+}
+
+error {
+    TcpDataOffsetTooSmall,
+    TcpOptionTooLongForHeader,
+    TcpBadSackOptionLength
+}
+
+struct tcp_option_sack_top
+{
+    bit<8> kind;
+    bit<8> length;
+}
+
+
 header udp_h {
     bit<16> src_port;
     bit<16> dst_port;
@@ -87,6 +139,8 @@ struct headers {
     srv6_ll_tlv_h srv6_ll_tlv;
     ipv6_h ipv6_inner;
     tcp_h tcp;
+    tcp_option_stack tcp_options_vec;
+    tcp_option_padding_h tcp_options_padding;
     udp_h udp;
     meta_h meta;
 }
