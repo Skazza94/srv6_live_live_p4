@@ -1,4 +1,4 @@
-ip link set eth0 address 00:00:00:0a:e1:00
+ip link set eth0 address 00:00:00:0a:e1:00 mtu 1400
 
 ip addr add 2001::a/64 dev eth0
 
