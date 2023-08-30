@@ -142,8 +142,15 @@ parser PktParser(packet_in packet,
     state check_last_srv6 {
         bool last_segment = ((bit<32>) hdr.srv6.last_entry) == ((bit<32>) hdr.srv6_list.lastIndex);
         transition select(last_segment) {
-           true: parse_srv6_ll_tlv;
-           false: parse_srv6_list;
+            true: parse_last_srv6;
+            false: parse_srv6_list;
+        }
+    }
+
+    state parse_last_srv6 {
+        transition select(hdr.srv6.tag) {
+            0: parse_srv6_next_hdr;
+            1: parse_srv6_ll_tlv;
         }
     }
 

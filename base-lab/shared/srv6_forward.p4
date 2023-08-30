@@ -37,8 +37,6 @@ control IngressPipe(inout headers hdr,
                     if (hdr.srv6.segment_left > 0) {
                         hdr.ipv6.dst_addr = meta.next_srv6_sid;
                         hdr.srv6.segment_left = hdr.srv6.segment_left - 1;
-                    } else {
-                        mark_to_drop(standard_metadata);
                     }
                 }
             }

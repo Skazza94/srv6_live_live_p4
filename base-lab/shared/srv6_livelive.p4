@@ -43,7 +43,13 @@ control IngressPipe(inout headers hdr,
         hdr.ipv6_inner.hop_limit = hdr.ipv6.hop_limit;
         hdr.ipv6_inner.src_addr = original_src_addr;
         hdr.ipv6_inner.dst_addr = hdr.ipv6.dst_addr;
+    }
 
+    action live_live_mcast(bit<16> mcast_group, bit<128> src_addr) {
+        standard_metadata.mcast_grp = mcast_group;
+
+        encapsulate_srv6(src_addr);
+        hdr.srv6.tag = 1;
         // Tag the packet with a sequence number
         hdr.bridge.setValid();
 
@@ -55,16 +61,9 @@ control IngressPipe(inout headers hdr,
         seq_n.write(flow_id, hdr.bridge.seq_n);
     }
 
-    action live_live_mcast(bit<16> mcast_group, bit<128> src_addr) {
-        standard_metadata.mcast_grp = mcast_group;
-
-        encapsulate_srv6(src_addr);
-    }
-
-    // TODO: Implement ECMP
-    action ipv6_encap_forward(bit<128> src_addr) {
-        random(standard_metadata.egress_spec, (bit<9>) 2, (bit<9>) 3);
-
+    action ipv6_encap_forward(bit<128> src_addr, bit<9> port) {
+        standard_metadata.egress_spec = port;
+        
         encapsulate_srv6(src_addr);
     }
 
@@ -76,7 +75,7 @@ control IngressPipe(inout headers hdr,
             ipv6_encap_forward;
             live_live_mcast;
         }
-        default_action = ipv6_encap_forward(0);
+        default_action = ipv6_encap_forward(0, 1);
         size = MAX_NUM_ENTRIES;
     }
 
@@ -172,6 +171,22 @@ control IngressPipe(inout headers hdr,
 
                         ipv6_forward.apply();
                     }
+                } else {
+                    hdr.ipv6.setInvalid();
+                    hdr.srv6.setInvalid();
+                    hdr.srv6_list[0].setInvalid();
+                    hdr.srv6_list[1].setInvalid();
+                    hdr.srv6_list[2].setInvalid();
+                    hdr.srv6_list[3].setInvalid();
+                    hdr.srv6_list[4].setInvalid();
+                    hdr.srv6_list[5].setInvalid();
+                    hdr.srv6_list[6].setInvalid();
+                    hdr.srv6_list[7].setInvalid();
+                    hdr.srv6_list[8].setInvalid();
+                    hdr.srv6_list[9].setInvalid();
+                    hdr.srv6_ll_tlv.setInvalid();
+
+                    ipv6_forward.apply();
                 }
             }
         }
