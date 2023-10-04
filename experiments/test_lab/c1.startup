@@ -1,0 +1,10 @@
+ip link set eth0 address 00:00:00:c1:e1:00
+ip link set eth1 address 00:00:00:c1:c3:00
+
+make all
+simple_switch -i 1@eth0 -i 2@eth1 --log-file /var/log/bmv2 /build/srv6_forward.json &
+
+while [[ $(pgrep simple_switch) -eq 0 ]]; do sleep 1; done
+until simple_switch_CLI <<< "help"; do sleep 1; done
+
+simple_switch_CLI <<< $(cat commands.txt)

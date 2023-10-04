@@ -1,3 +1,5 @@
 .idea 
 *.pcap
 .DS_Store
+experiments/results
+experiments/figures
