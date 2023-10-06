@@ -60,7 +60,7 @@ def run_test(test_type: str, metric: str, delay: int, loss: float, test_number: 
         lab_hash=lab.hash
     )
 
-    kathara.connect_tty("b", lab_hash=lab.hash)
+    # kathara.connect_tty("b", lab_hash=lab.hash)
 
     exec_output = kathara.exec(
         machine_name="a",
@@ -68,27 +68,20 @@ def run_test(test_type: str, metric: str, delay: int, loss: float, test_number: 
         lab_hash=lab.hash
     )
 
-    kathara.connect_tty("a", lab_hash=lab.hash)
+    logging.info("Waiting iperf experiment...")
+    output = ""
+    try:
+        while True:
+            (stdout, _) = next(exec_output)
+            stdout = stdout.decode('utf-8') if stdout else ""
 
-    time.sleep(15)
+            if stdout:
+                output += stdout
+    except StopIteration:
+        pass
 
-    # logging.info("Waiting iperf experiment...")
-    # output = ""
-    # try:
-    #     while True:
-    #         (stdout, _) = next(exec_output)
-    #         stdout = stdout.decode('utf-8') if stdout else ""
-    #
-    #         if stdout:
-    #             output += stdout
-    # except StopIteration:
-    #     pass
-    #
-    # print(output)
-    # exit()
-
-    shutil.copy(os.path.join(test_lab_path, "shared", f"test_{test_number}.json"),
-                os.path.join("results", test_type, metric, str(delay), f"test_{test_number}.json"))
+    with open(os.path.join("results", test_type, metric, str(delay), f"test_{test_number}.json"), 'w') as test_result:
+        test_result.write(output)
 
     logging.info("Undeploying lab...")
     kathara.undeploy_lab(lab=lab)
