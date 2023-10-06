@@ -4,4 +4,6 @@
 experiments/results*
 experiments/figures*
 experiments/test_lab*
-__pycache__
+experiments/*/shared/test_*.json
+*-lab/shared/test_*.json
+*/__pycache__/

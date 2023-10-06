@@ -12,7 +12,7 @@ from Kathara.setting.Setting import Setting
 from colored_logging import set_logging
 
 
-def run_test(test_type: str, delay: int, test_number: int):
+def run_test(test_type: str, metric: str, delay: int, loss: float, test_number: int):
     lab_path = "lab"
     test_lab_path = "test_lab"
 
@@ -21,8 +21,6 @@ def run_test(test_type: str, delay: int, test_number: int):
 
     logging.info("Creating test lab...")
     copy_tree(lab_path, test_lab_path)
-
-    Setting.get_instance().load_from_dict({'enable_ipv6': True})
 
     kathara = Kathara.get_instance()
     kathara.wipe()
@@ -34,14 +32,14 @@ def run_test(test_type: str, delay: int, test_number: int):
 
     lab.write_line_after(
         file_path="e1.startup",
-        line_to_add=f"tc qdisc add dev eth1 root netem loss 10% delay {delay}ms",
+        line_to_add=f"tc qdisc add dev eth1 root netem loss {loss}% delay {delay}ms",
         searched_line="ip link set eth2 address 00:00:00:e1:c2:00"
     )
 
     lab.write_line_after(
         file_path="e1.startup",
-        line_to_add=f"tc qdisc add dev eth2 root netem loss 10% delay {delay}ms",
-        searched_line=f"tc qdisc add dev eth1 root netem loss 10% delay {delay}ms"
+        line_to_add=f"tc qdisc add dev eth2 root netem loss {loss}% delay {delay}ms",
+        searched_line=f"tc qdisc add dev eth1 root netem loss {loss}% delay {delay}ms"
     )
 
     e1 = lab.get_machine("e1")
@@ -53,34 +51,44 @@ def run_test(test_type: str, delay: int, test_number: int):
     logging.info("Deploying lab...")
     kathara.deploy_lab(lab)
 
-    kathara.exec(
+    time.sleep(5)
+
+    logging.info("Launching iperf...")
+    exec_output = kathara.exec(
         machine_name="b",
-        command="iperf3 -6 -s",
+        command=shlex.split("/bin/bash -c '/usr/bin/iperf3 -6 -s'"),
         lab_hash=lab.hash
     )
 
-    time.sleep(3)
+    kathara.connect_tty("b", lab_hash=lab.hash)
 
     exec_output = kathara.exec(
         machine_name="a",
-        command=shlex.split(f"iperf3 -6 -c 2002::b -b 4M -J > /shared/test_{test_number}.json"),
+        command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c 2002::b -J'"),
         lab_hash=lab.hash
     )
 
-    logging.info("Waiting iperf experiment...")
-    output = ""
-    try:
-        while True:
-            (stdout, _) = next(exec_output)
-            stdout = stdout.decode('utf-8') if stdout else ""
+    kathara.connect_tty("a", lab_hash=lab.hash)
 
-            if stdout:
-                output += stdout
-    except StopIteration:
-        pass
+    time.sleep(15)
+
+    # logging.info("Waiting iperf experiment...")
+    # output = ""
+    # try:
+    #     while True:
+    #         (stdout, _) = next(exec_output)
+    #         stdout = stdout.decode('utf-8') if stdout else ""
+    #
+    #         if stdout:
+    #             output += stdout
+    # except StopIteration:
+    #     pass
+    #
+    # print(output)
+    # exit()
 
     shutil.copy(os.path.join(test_lab_path, "shared", f"test_{test_number}.json"),
-                os.path.join("results", test_type, f"{delay}", f"test_{test_number}.json"))
+                os.path.join("results", test_type, metric, str(delay), f"test_{test_number}.json"))
 
     logging.info("Undeploying lab...")
     kathara.undeploy_lab(lab=lab)
@@ -92,26 +100,36 @@ def run_test(test_type: str, delay: int, test_number: int):
 if __name__ == '__main__':
     set_logging()
 
-    if not os.path.isdir(os.path.join("results", "live-live")):
-        os.mkdir(os.path.join("results", "live-live"))
+    Setting.get_instance().load_from_dict({'enable_ipv6': True})
 
-    logging.info("Running live live experiments...")
-    for delay in range(10, 110, 10):
-        logging.info(f"\t- DELAY: {delay}")
-        if not os.path.isdir(os.path.join("results", "live-live", str(delay))):
-            os.mkdir(os.path.join("results", "live-live", str(delay)))
-        for run in range(1, 4):
-            logging.info(f"Starting run {run}")
-            run_test('live-live', delay, run)
+    for test_type in ['live-live', 'baseline']:
+        test_type_path = os.path.join("results", test_type)
+        if not os.path.isdir(test_type_path):
+            os.makedirs(test_type_path, exist_ok=True)
 
-    if not os.path.isdir(os.path.join("results", "baseline")):
-        os.mkdir(os.path.join("results", "baseline"))
+        logging.info(f"Running {test_type} experiments...")
+        delay_path = os.path.join(test_type_path, "delay")
+        if not os.path.isdir(delay_path):
+            os.mkdir(delay_path)
+        for delay in range(10, 110, 10):
+            logging.info(f"\t- DELAY: {delay}")
+            test_folder = os.path.join(delay_path, str(delay))
+            if not os.path.isdir(test_folder):
+                os.mkdir(test_folder)
 
-    logging.info("Running baseline experiments...")
-    for delay in range(10, 110, 10):
-        logging.info(f"\t- DELAY: {delay}")
-        if not os.path.isdir(os.path.join("results", "baseline", str(delay))):
-            os.mkdir(os.path.join("results", "baseline", str(delay)))
-        for run in range(1, 4):
-            logging.info(f"Starting run {run}")
-            run_test('baseline', delay, run)
+            for run in range(1, 4):
+                logging.info(f"Starting run {run}")
+                run_test(test_type, 'delay', delay, 10, run)
+
+        loss_path = os.path.join(test_type_path, "loss")
+        if not os.path.isdir(loss_path):
+            os.mkdir(loss_path)
+        for loss in range(1, 11, 1):
+            logging.info(f"\t- LOSS: {loss}%")
+            test_folder = os.path.join(loss_path, str(loss))
+            if not os.path.isdir(test_folder):
+                os.mkdir(test_folder)
+
+            for run in range(1, 4):
+                logging.info(f"Starting run {run}")
+                run_test(test_type, 'loss', 100, loss, run)
