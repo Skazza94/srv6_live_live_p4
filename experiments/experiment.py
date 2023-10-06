@@ -1,7 +1,7 @@
 import logging
 import os.path
 import shlex
-import shutil
+import sys
 import time
 from distutils.dir_util import copy_tree, remove_tree
 
@@ -54,13 +54,11 @@ def run_test(test_type: str, metric: str, delay: int, loss: float, test_number: 
     time.sleep(5)
 
     logging.info("Launching iperf...")
-    exec_output = kathara.exec(
+    kathara.exec(
         machine_name="b",
         command=shlex.split("/bin/bash -c '/usr/bin/iperf3 -6 -s'"),
         lab_hash=lab.hash
     )
-
-    # kathara.connect_tty("b", lab_hash=lab.hash)
 
     exec_output = kathara.exec(
         machine_name="a",
@@ -91,12 +89,21 @@ def run_test(test_type: str, metric: str, delay: int, loss: float, test_number: 
 
 
 if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        print(
+            "Usage: experiment.py <result_path> <n_runs>"
+        )
+        exit(1)
+
+    result_path = os.path.abspath(sys.argv[1])
+    n_runs = int(sys.argv[2])
+
     set_logging()
 
     Setting.get_instance().load_from_dict({'enable_ipv6': True})
 
     for test_type in ['live-live', 'baseline']:
-        test_type_path = os.path.join("results", test_type)
+        test_type_path = os.path.join(result_path, test_type)
         if not os.path.isdir(test_type_path):
             os.makedirs(test_type_path, exist_ok=True)
 
@@ -110,7 +117,7 @@ if __name__ == '__main__':
             if not os.path.isdir(test_folder):
                 os.mkdir(test_folder)
 
-            for run in range(1, 4):
+            for run in range(1, n_runs + 1):
                 logging.info(f"Starting run {run}")
                 run_test(test_type, 'delay', delay, 10, run)
 
@@ -123,6 +130,6 @@ if __name__ == '__main__':
             if not os.path.isdir(test_folder):
                 os.mkdir(test_folder)
 
-            for run in range(1, 4):
+            for run in range(1, n_runs + 1):
                 logging.info(f"Starting run {run}")
                 run_test(test_type, 'loss', 100, loss, run)
