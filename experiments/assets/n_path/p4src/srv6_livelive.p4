@@ -256,7 +256,7 @@ control EgressPipe(inout headers hdr,
         size = MAX_NUM_ENTRIES;
     }
 
-    apply {
+    apply { 
         srv6_forward.apply();
         srv6_live_live_forward.apply();
 

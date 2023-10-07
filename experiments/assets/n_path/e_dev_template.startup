@@ -1,8 +1,7 @@
-ip link set eth0 address 00:00:00:c1:e1:00
-ip link set eth1 address 00:00:00:c1:c3:00
+{ip_link}
 
 make all
-simple_switch -i 1@eth0 -i 2@eth1 /build/srv6_forward.json &
+simple_switch {simple_switch_ifaces} /build/srv6_livelive.json &
 
 while [[ $(pgrep simple_switch) -eq 0 ]]; do sleep 1; done
 until simple_switch_CLI <<< "help"; do sleep 1; done

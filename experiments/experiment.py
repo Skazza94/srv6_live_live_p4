@@ -12,7 +12,7 @@ from Kathara.setting.Setting import Setting
 from colored_logging import set_logging
 
 
-def run_test(test_type: str, metric: str, delay: int, loss: float, test_number: int):
+def run_test(test_folder: str, delay: int, loss: float, test_number: int):
     lab_path = "lab"
     test_lab_path = "test_lab"
 
@@ -78,7 +78,7 @@ def run_test(test_type: str, metric: str, delay: int, loss: float, test_number: 
     except StopIteration:
         pass
 
-    with open(os.path.join("results", test_type, metric, str(delay), f"test_{test_number}.json"), 'w') as test_result:
+    with open(os.path.join(test_folder, f"test_{test_number}.json"), 'w') as test_result:
         test_result.write(output)
 
     logging.info("Undeploying lab...")
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
             for run in range(1, n_runs + 1):
                 logging.info(f"Starting run {run}")
-                run_test(test_type, 'delay', delay, 10, run)
+                run_test(test_folder, delay, 10, run)
 
         loss_path = os.path.join(test_type_path, "loss")
         if not os.path.isdir(loss_path):
@@ -132,4 +132,4 @@ if __name__ == '__main__':
 
             for run in range(1, n_runs + 1):
                 logging.info(f"Starting run {run}")
-                run_test(test_type, 'loss', 100, loss, run)
+                run_test(test_folder, 100, loss, run)

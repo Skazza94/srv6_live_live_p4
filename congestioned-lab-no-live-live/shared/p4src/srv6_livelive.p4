@@ -196,6 +196,8 @@ control IngressPipe(inout headers hdr,
 control EgressPipe(inout headers hdr,
                    inout metadata meta,
                    inout standard_metadata_t standard_metadata) {
+    bit<8> n_segments = 0;
+
     action add_srv6_dest_segment(bit<128> dst_addr) {
         hdr.ipv6.dst_addr = dst_addr;
 
@@ -204,17 +206,16 @@ control EgressPipe(inout headers hdr,
         hdr.srv6_list[0].segment_id = dst_addr;
 
         hdr.ipv6.payload_len = hdr.ipv6.payload_len + hdr.srv6_list[0].minSizeInBytes();
-    
+
         hdr.srv6.hdr_ext_len = hdr.srv6.hdr_ext_len + 2;
+
+        n_segments = n_segments + 1;
     }
 
     action add_srv6_ll_segment(bit<128> ll_func) {
         hdr.srv6_list.push_front(1);
         hdr.srv6_list[0].setValid();
         hdr.srv6_list[0].segment_id = ll_func;
-
-        hdr.srv6.segment_left = hdr.srv6.segment_left + 1;
-        hdr.srv6.last_entry = hdr.srv6.last_entry + 1;
 
         hdr.srv6_ll_tlv.setValid();
         hdr.srv6_ll_tlv.type = 0xff;
@@ -227,6 +228,8 @@ control EgressPipe(inout headers hdr,
         hdr.ipv6.payload_len = hdr.ipv6.payload_len + hdr.srv6_list[0].minSizeInBytes() + hdr.srv6_ll_tlv.minSizeInBytes();
 
         hdr.srv6.hdr_ext_len = hdr.srv6.hdr_ext_len + 2;
+
+        n_segments = n_segments + 1;
     }
 
     table srv6_forward {
@@ -253,9 +256,12 @@ control EgressPipe(inout headers hdr,
         size = MAX_NUM_ENTRIES;
     }
 
-    apply { 
+    apply {
         srv6_forward.apply();
         srv6_live_live_forward.apply();
+
+        hdr.srv6.segment_left = n_segments - 1;
+        hdr.srv6.last_entry = n_segments - 1;
     }
 }
 

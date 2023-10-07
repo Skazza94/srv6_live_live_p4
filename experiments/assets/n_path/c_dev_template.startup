@@ -1,5 +1,5 @@
-ip link set eth0 address 00:00:00:c1:e1:00
-ip link set eth1 address 00:00:00:c1:c3:00
+ip link set eth0 address {eth0_mac}
+ip link set eth1 address {eth1_mac}
 
 make all
 simple_switch -i 1@eth0 -i 2@eth1 /build/srv6_forward.json &
