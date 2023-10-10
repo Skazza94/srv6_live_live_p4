@@ -1,0 +1,4 @@
+kathara;
+matplotlib;
+coloredlogs;
+numpy;

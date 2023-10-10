@@ -1,28 +1,35 @@
 import glob
 import logging
+import math
 import os.path
 import os.path
 import shlex
 import sys
 import time
 
+import numpy as np
 from Kathara.manager.Kathara import Kathara
 from Kathara.model.Lab import Lab
-from Kathara.setting.Setting import Setting
 
 from colored_logging import set_logging
 
 
-def run_test(lab: Lab, n_path: int, test_folder: str, delay: int, loss: float, test_number: int):
+def run_test(lab: Lab, n_path: int, test_folder: str, test_number: int):
     kathara = Kathara.get_instance()
     kathara.wipe()
 
     logging.info("Adding congestion...")
 
-    for i in range(1, n_path + 1):
+    delay = 40
+    np.random.seed(10)
+    loss_dist = np.random.lognormal(1, 0.7, size=n_path)
+
+    for i in range(0, n_path):
+        int_loss = math.ceil(loss_dist[i])
+
         lab.write_line_before(
             file_path="e1.startup",
-            line_to_add=f"tc qdisc add dev eth{i} root netem loss {loss}% delay {delay}ms",
+            line_to_add=f"tc qdisc add dev eth{i} root netem loss {int_loss}% delay {delay}ms",
             searched_line="make all"
         )
 
@@ -40,7 +47,7 @@ def run_test(lab: Lab, n_path: int, test_folder: str, delay: int, loss: float, t
 
     exec_output = kathara.exec(
         machine_name="a",
-        command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c 2002::b -J'"),
+        command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c 2002::b -b 10M -J'"),
         lab_hash=lab.hash
     )
 
@@ -81,6 +88,7 @@ def build_lab(n_paths, test_type):
     lab = Lab(name=f"paths_{n_paths}")
     a = lab.new_machine(
         "a",
+        ipv6=True,
         image="kathara/base",
         sysctls=["net.ipv4.tcp_no_metrics_save=1", "net.ipv4.tcp_rmem=33554432", "net.ipv4.tcp_wmem=33554432"]
     )
@@ -93,6 +101,7 @@ def build_lab(n_paths, test_type):
 
     b = lab.new_machine(
         "b",
+        ipv6=True,
         image="kathara/base",
         sysctls=["net.ipv4.tcp_no_metrics_save=1", "net.ipv4.tcp_rmem=33554432", "net.ipv4.tcp_wmem=33554432"]
     )
@@ -124,7 +133,7 @@ def build_lab(n_paths, test_type):
         startup = c_dev_startup_template.format(eth0_mac=f"00:00:00:c{i}:e1:00", eth1_mac=f"00:00:00:c{i}:e2:00")
         lab.create_file_from_string(startup, f"c{i}.startup")
 
-        if test_type == "live-live":
+        if test_type in ["live-live", "no-deduplicate"]:
             commands = [
                 "table_add srv6_table srv6_noop 2002::b/128 => 2",
                 "table_add srv6_table srv6_noop 2001::a/128 => 1"
@@ -141,20 +150,39 @@ def build_lab(n_paths, test_type):
 
         c_devices[c_dev_name] = c_dev
 
+    e1_commands = ""
     if test_type == "live-live":
         e1_commands = (
                 "mc_mgrp_create 1\n" +
                 "mc_node_create 1 " + " ".join([str(x) for x in range(2, 2 + n_paths)]) + "\n" +
                 "mc_node_associate 1 0\n" +
                 "table_add check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2\n" +
-                "table_set_default check_live_live_enabled ipv6_encap_forward e1::2 2\n" +
+                f"table_set_default check_live_live_enabled ipv6_encap_forward_random e1::2 2 {2 + n_paths}\n" +
                 "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55\n" +
                 "table_add srv6_function srv6_ll_deduplicate 85 => \n" +
                 "table_add ipv6_forward forward 2001::/64 => 1 0x0000000ae100"
         )
-    else:
+    elif test_type == "no-deduplicate":
         e1_commands = (
-                "table_add check_live_live_enabled ipv6_encap_forward 2001::/64 => e1::2 2\n" +
+                "mc_mgrp_create 1\n" +
+                "mc_node_create 1 " + " ".join([str(x) for x in range(2, 2 + n_paths)]) + "\n" +
+                "mc_node_associate 1 0\n" +
+                "table_add check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2\n" +
+                f"table_set_default check_live_live_enabled ipv6_encap_forward_random e1::2 2 {2 + n_paths}\n" +
+                "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55\n" +
+                "table_add ipv6_forward forward 2001::/64 => 1 0x0000000ae100"
+        )
+    elif test_type == "random":
+        e1_commands = (
+                f"table_add check_live_live_enabled ipv6_encap_forward_random 2001::/64 => e1::2 2 {2 + n_paths}\n" +
+                "table_add ipv6_forward forward 2001::/64 => 1 0x0000000ae100\n"
+        )
+
+        for i in range(2, 2 + n_paths):
+            e1_commands += f"table_add srv6_forward add_srv6_dest_segment {i} => e2::2\n"
+    elif test_type == "single":
+        e1_commands = (
+                "table_add check_live_live_enabled ipv6_encap_forward_port 2001::/64 => e1::2 2\n" +
                 "table_add srv6_forward add_srv6_dest_segment 2 => e2::2\n" +
                 "table_add ipv6_forward forward 2001::/64 => 1 0x0000000ae100"
         )
@@ -191,21 +219,43 @@ def build_lab(n_paths, test_type):
         ),
         "e2.startup"
     )
+    e2_commands = ""
     if test_type == "live-live":
-        e2_commands = ("table_add srv6_function srv6_ll_deduplicate 85 => \n" +
-                       f"table_add ipv6_forward forward 2002::/64 => {iface_idx + 1} 0x0000000be200\n" +
-                       "mc_mgrp_create 1\n" +
-                       "mc_node_create 1 " + " ".join([str(x) for x in range(1, 1 + n_paths)]) + "\n" +
-                       "mc_node_associate 1 0\n" +
-                       "table_add check_live_live_enabled live_live_mcast 2002::/64 => 1 e2::2\n" +
-                       "table_set_default check_live_live_enabled ipv6_encap_forward e2::2 1\n" +
-                       "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55")
-    else:
         e2_commands = (
-                "table_add check_live_live_enabled ipv6_encap_forward 2002::/64 => e2::2 1\n" +
+                "table_add srv6_function srv6_ll_deduplicate 85 => \n" +
+                f"table_add ipv6_forward forward 2002::/64 => {iface_idx + 1} 0x0000000be200\n" +
+                "mc_mgrp_create 1\n" +
+                "mc_node_create 1 " + " ".join([str(x) for x in range(1, 1 + n_paths)]) + "\n" +
+                "mc_node_associate 1 0\n" +
+                "table_add check_live_live_enabled live_live_mcast 2002::/64 => 1 e2::2\n" +
+                f"table_set_default check_live_live_enabled ipv6_encap_forward_random e2::2 1 {1 + n_paths}\n" +
+                "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55"
+        )
+    elif test_type == "no-deduplicate":
+        e2_commands = (
+                f"table_add ipv6_forward forward 2002::/64 => {iface_idx + 1} 0x0000000be200\n" +
+                "mc_mgrp_create 1\n" +
+                "mc_node_create 1 " + " ".join([str(x) for x in range(1, 1 + n_paths)]) + "\n" +
+                "mc_node_associate 1 0\n" +
+                "table_add check_live_live_enabled live_live_mcast 2002::/64 => 1 e2::2\n" +
+                f"table_set_default check_live_live_enabled ipv6_encap_forward_random e2::2 1 {1 + n_paths}\n" +
+                "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55"
+        )
+    elif test_type == "random":
+        e2_commands = (
+                f"table_add check_live_live_enabled ipv6_encap_forward_random 2002::/64 => e2::2 1 {1 + n_paths}\n" +
+                f"table_add ipv6_forward forward 2002::/64 => {iface_idx + 1} 0x0000000be200\n"
+        )
+
+        for i in range(1, 1 + n_paths):
+            e2_commands += f"table_add srv6_forward add_srv6_dest_segment {i} => e1::2\n"
+    elif test_type == "single":
+        e2_commands = (
+                "table_add check_live_live_enabled ipv6_encap_forward_port 2002::/64 => e2::2 1\n" +
                 f"table_add srv6_forward add_srv6_dest_segment 1 => e1::2\n" +
                 f"table_add ipv6_forward forward 2002::/64 => {iface_idx + 1} 0x0000000be200"
         )
+
     e2.create_file_from_string(e2_commands, "commands.txt")
     lab.connect_machine_obj_to_link(e2, "B")  # Connected to Machine "b"
 
@@ -225,10 +275,8 @@ if __name__ == '__main__':
 
     set_logging()
 
-    Setting.get_instance().load_from_dict({'enable_ipv6': True})
-
     for n_path in range(2, max_path + 1):
-        for test_type in ['live-live', 'baseline']:
+        for test_type in ['live-live', 'random', 'single', 'no-deduplicate']:
             test_type_path = os.path.join(result_path, test_type, str(n_path))
             if not os.path.isdir(test_type_path):
                 os.makedirs(test_type_path, exist_ok=True)
@@ -237,28 +285,7 @@ if __name__ == '__main__':
             logging.info(f"Building lab with {n_path} paths")
 
             lab = build_lab(n_path, test_type)
-            delay_path = os.path.join(test_type_path, "delay")
-            if not os.path.isdir(delay_path):
-                os.mkdir(delay_path)
-            for delay in range(10, 110, 10):
-                logging.info(f"\t- DELAY: {delay}")
-                test_folder = os.path.join(delay_path, str(delay))
-                if not os.path.isdir(test_folder):
-                    os.mkdir(test_folder)
 
-                for run in range(1, n_runs + 1):
-                    logging.info(f"Starting run {run}")
-                    run_test(lab, n_path, test_folder, delay, 10, run)
-
-            loss_path = os.path.join(test_type_path, "loss")
-            if not os.path.isdir(loss_path):
-                os.mkdir(loss_path)
-            for loss in range(1, 11, 1):
-                logging.info(f"\t- LOSS: {loss}%")
-                test_folder = os.path.join(loss_path, str(loss))
-                if not os.path.isdir(test_folder):
-                    os.mkdir(test_folder)
-
-                for run in range(1, n_runs + 1):
-                    logging.info(f"Starting run {run}")
-                    run_test(lab, n_path, test_folder, 100, loss, run)
+            for run in range(1, n_runs + 1):
+                logging.info(f"Starting run {run}")
+                run_test(lab, n_path, test_type_path, run)

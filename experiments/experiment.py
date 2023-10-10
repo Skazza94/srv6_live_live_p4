@@ -7,7 +7,6 @@ from distutils.dir_util import copy_tree, remove_tree
 
 from Kathara.manager.Kathara import Kathara
 from Kathara.parser.netkit.LabParser import LabParser
-from Kathara.setting.Setting import Setting
 
 from colored_logging import set_logging
 
@@ -62,7 +61,7 @@ def run_test(test_folder: str, delay: int, loss: float, test_number: int):
 
     exec_output = kathara.exec(
         machine_name="a",
-        command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c 2002::b -J'"),
+        command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c 2002::b -b 6M -J'"),
         lab_hash=lab.hash
     )
 
@@ -99,8 +98,6 @@ if __name__ == '__main__':
     n_runs = int(sys.argv[2])
 
     set_logging()
-
-    Setting.get_instance().load_from_dict({'enable_ipv6': True})
 
     for test_type in ['live-live', 'baseline']:
         test_type_path = os.path.join(result_path, test_type)
