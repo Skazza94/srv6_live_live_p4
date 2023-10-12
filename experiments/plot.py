@@ -124,9 +124,6 @@ def plot_n_path_bitrate_figure(results):
     def plot_n_path_bitrate_line(res, color, marker, label, errorbar_color):
         to_plot = {'x': [], 'y': [], 'dy': []}
         for n_path, res in sorted(res.items(), key=lambda item: item[0]):
-            if n_path > 7:
-                continue
-
             values = []
             for result in res:
                 if result:
@@ -135,7 +132,6 @@ def plot_n_path_bitrate_figure(results):
             to_plot['x'].append(n_path)
             to_plot['y'].append(statistics.mean(values))
             to_plot['dy'].append(statistics.stdev(values))
-
         plt.plot(
             to_plot['x'], to_plot['y'], label=label, linestyle='dashed', fillstyle='none', color=color,
             marker=marker
@@ -144,55 +140,18 @@ def plot_n_path_bitrate_figure(results):
             plt.errorbar(x, to_plot['y'][idx], yerr=to_plot['dy'][idx], color=errorbar_color, elinewidth=1, capsize=1)
 
     plt.clf()
-    ax = plt.gca()
     plot_n_path_bitrate_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
-    plot_n_path_bitrate_line(results['baseline'], 'blue', "^", "Random", "darkblue")
+    plot_n_path_bitrate_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_bitrate_line(results['single'], 'green', "v", "Single", "darkgreen")
     plot_n_path_bitrate_line(results['no-deduplicate'], 'goldenrod', "s", "No Deduplication", "darkgoldenrod")
 
+    plt.xticks([2, 3, 4, 5, 6, 7])
+
     plt.xlabel('N. Paths')
     plt.ylabel('Bitrate [Mbps]')
-    plt.legend(loc=(0.65, 0.55), labelspacing=0.2, prop={'size': 8})
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.28), labelspacing=0.2, ncols=2, prop={'size': 8})
     plt.savefig(
         os.path.join(figures_path, f"n_path_bitrate.pdf"), format="pdf", bbox_inches='tight'
-    )
-
-
-def plot_n_path_rtt_figure(results):
-    def plot_n_path_rtt_line(res, color, marker, label, errorbar_color):
-        to_plot = {'x': [], 'y': [], 'dy': []}
-        for n_path, res in sorted(res.items(), key=lambda item: item[0]):
-            if n_path > 7:
-                continue
-
-            values = []
-            for result in res:
-                if result:
-                    values.append(result['avg_rtt'] / 1000)
-
-            to_plot['x'].append(n_path)
-            to_plot['y'].append(statistics.mean(values))
-            to_plot['dy'].append(statistics.stdev(values))
-
-        plt.plot(
-            to_plot['x'], to_plot['y'], label=label, linestyle='dashed', fillstyle='none', color=color,
-            marker=marker
-        )
-        for idx, x in enumerate(to_plot['x']):
-            plt.errorbar(x, to_plot['y'][idx], yerr=to_plot['dy'][idx], color=errorbar_color, elinewidth=1, capsize=1)
-
-    plt.clf()
-    ax = plt.gca()
-    plot_n_path_rtt_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
-    plot_n_path_rtt_line(results['baseline'], 'blue', "^", "Random", "darkblue")
-    plot_n_path_rtt_line(results['single'], 'green', "v", "Single", "darkgreen")
-    plot_n_path_rtt_line(results['no-deduplicate'], 'goldenrod', "s", "No Deduplication", "darkgoldenrod")
-
-    plt.xlabel('N. Paths')
-    plt.ylabel('Average RTT [ms]')
-    plt.legend(loc=(0.65, 0.55), labelspacing=0.2, prop={'size': 8})
-    plt.savefig(
-        os.path.join(figures_path, f"n_path_rtt.pdf"), format="pdf", bbox_inches='tight'
     )
 
 
@@ -200,14 +159,13 @@ def plot_n_path_cwd_figure(results):
     def plot_n_path_cwd_line(res, color, marker, label, errorbar_color):
         to_plot = {'x': [], 'y': [], 'dy': []}
         for n_path, res in sorted(res.items(), key=lambda item: item[0]):
-            if n_path > 7:
-                continue
-
             values = []
             for result in res:
+                if label == "LiveLive":
+                    print(n_path, label, result['cwd'] / 1000)
+
                 if result:
                     values.append(result['cwd'] / 1000)
-
             to_plot['x'].append(n_path)
             to_plot['y'].append(statistics.mean(values))
             to_plot['dy'].append(statistics.stdev(values))
@@ -220,15 +178,16 @@ def plot_n_path_cwd_figure(results):
             plt.errorbar(x, to_plot['y'][idx], yerr=to_plot['dy'][idx], color=errorbar_color, elinewidth=1, capsize=1)
 
     plt.clf()
-    ax = plt.gca()
     plot_n_path_cwd_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
-    plot_n_path_cwd_line(results['baseline'], 'blue', "^", "Random", "darkblue")
+    plot_n_path_cwd_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_cwd_line(results['single'], 'green', "v", "Single", "darkgreen")
     plot_n_path_cwd_line(results['no-deduplicate'], 'goldenrod', "s", "No Deduplication", "darkgoldenrod")
 
+    plt.xticks([2, 3, 4, 5, 6, 7])
+
     plt.xlabel('N. Paths')
     plt.ylabel('Cwnd Size [KBytes]')
-    plt.legend(loc=(0.65, 0.55), labelspacing=0.2, prop={'size': 8})
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.28), labelspacing=0.2, ncols=2, prop={'size': 8})
     plt.savefig(
         os.path.join(figures_path, f"n_path_cwd.pdf"), format="pdf", bbox_inches='tight'
     )
@@ -238,7 +197,7 @@ def plot_n_path_retry_figure(results):
     def plot_n_path_retry_line(res, color, marker, label, errorbar_color):
         to_plot = {'x': [], 'y': [], 'dy': []}
         for n_path, res in sorted(res.items(), key=lambda item: item[0]):
-            if n_path > 7:
+            if n_path > 6:
                 continue
 
             values = []
@@ -258,15 +217,16 @@ def plot_n_path_retry_figure(results):
             plt.errorbar(x, to_plot['y'][idx], yerr=to_plot['dy'][idx], color=errorbar_color, elinewidth=1, capsize=1)
 
     plt.clf()
-    ax = plt.gca()
     plot_n_path_retry_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
-    plot_n_path_retry_line(results['baseline'], 'blue', "^", "Random", "darkblue")
+    plot_n_path_retry_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_retry_line(results['single'], 'green', "v", "Single", "darkgreen")
     plot_n_path_retry_line(results['no-deduplicate'], 'goldenrod', "s", "No Deduplication", "darkgoldenrod")
 
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.28), labelspacing=0.2, ncols=2, prop={'size': 8})
+
     plt.xlabel('N. Paths')
     plt.ylabel('N. TCP Retransmissions')
-    plt.legend(loc=(0.65, 0.55), labelspacing=0.2, prop={'size': 8})
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.28), labelspacing=0.2, ncols=2, prop={'size': 8})
     plt.savefig(
         os.path.join(figures_path, f"n_path_retr.pdf"), format="pdf", bbox_inches='tight'
     )
@@ -297,6 +257,6 @@ if __name__ == '__main__':
     # plot_latency_retry_figure(simple_results)
 
     plot_n_path_bitrate_figure(n_path_results)
-    plot_n_path_rtt_figure(n_path_results)
+    # plot_n_path_rtt_figure(n_path_results)
     plot_n_path_cwd_figure(n_path_results)
     plot_n_path_retry_figure(n_path_results)
