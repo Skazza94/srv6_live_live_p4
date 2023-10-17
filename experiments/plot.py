@@ -140,12 +140,12 @@ def plot_n_path_bitrate_figure(results):
             plt.errorbar(x, to_plot['y'][idx], yerr=to_plot['dy'][idx], color=errorbar_color, elinewidth=1, capsize=1)
 
     plt.clf()
-    plot_n_path_bitrate_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
-    plot_n_path_bitrate_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_bitrate_line(results['single'], 'green', "v", "Single", "darkgreen")
+    plot_n_path_bitrate_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_bitrate_line(results['no-deduplicate'], 'goldenrod', "s", "No Deduplication", "darkgoldenrod")
+    plot_n_path_bitrate_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
 
-    plt.xticks([2, 3, 4, 5, 6, 7])
+    plt.xticks([2, 3, 4, 5, 6])
 
     plt.xlabel('N. Paths')
     plt.ylabel('Bitrate [Mbps]')
@@ -178,12 +178,12 @@ def plot_n_path_cwd_figure(results):
             plt.errorbar(x, to_plot['y'][idx], yerr=to_plot['dy'][idx], color=errorbar_color, elinewidth=1, capsize=1)
 
     plt.clf()
-    plot_n_path_cwd_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
-    plot_n_path_cwd_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_cwd_line(results['single'], 'green', "v", "Single", "darkgreen")
+    plot_n_path_cwd_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_cwd_line(results['no-deduplicate'], 'goldenrod', "s", "No Deduplication", "darkgoldenrod")
+    plot_n_path_cwd_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
 
-    plt.xticks([2, 3, 4, 5, 6, 7])
+    plt.xticks([2, 3, 4, 5, 6])
 
     plt.xlabel('N. Paths')
     plt.ylabel('Cwnd Size [KBytes]')
@@ -217,12 +217,14 @@ def plot_n_path_retry_figure(results):
             plt.errorbar(x, to_plot['y'][idx], yerr=to_plot['dy'][idx], color=errorbar_color, elinewidth=1, capsize=1)
 
     plt.clf()
-    plot_n_path_retry_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
-    plot_n_path_retry_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_retry_line(results['single'], 'green', "v", "Single", "darkgreen")
+    plot_n_path_retry_line(results['random'], 'blue', "^", "Random", "darkblue")
     plot_n_path_retry_line(results['no-deduplicate'], 'goldenrod', "s", "No Deduplication", "darkgoldenrod")
+    plot_n_path_retry_line(results['live-live'], 'red', "o", "LiveLive", "darkred")
 
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.28), labelspacing=0.2, ncols=2, prop={'size': 8})
+
+    plt.xticks([2, 3, 4, 5, 6])
 
     plt.xlabel('N. Paths')
     plt.ylabel('N. TCP Retransmissions')
