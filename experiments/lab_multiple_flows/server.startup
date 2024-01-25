@@ -1,0 +1,7 @@
+ip link set eth0 address 00:00:00:1b:e2:00 mtu 1400
+
+ip addr add 2004::1b/64 dev eth0
+
+ip route add default via 2004::e2 dev eth0
+
+ip -6 neigh add 2004::e2 lladdr 00:00:00:e2:1b:00 dev eth0

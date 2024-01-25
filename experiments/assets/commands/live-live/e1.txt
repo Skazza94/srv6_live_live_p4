@@ -2,9 +2,11 @@ mc_mgrp_create 1
 mc_node_create 1 2 3
 mc_node_associate 1 0
 table_add check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2
+table_add check_live_live_enabled ipv6_encap_forward 2003::/64 => e1::2 2z
 table_set_default check_live_live_enabled ipv6_encap_forward e1::2 2
 table_add srv6_forward add_srv6_dest_segment 2 => c3::e2
 table_add srv6_forward add_srv6_dest_segment 3 => c4::e2
 table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55
 table_add srv6_function srv6_ll_deduplicate 85 => 
 table_add ipv6_forward forward 2001::/64 => 1 0x0000000ae100
+table_add ipv6_forward forward 2003::/64 => 4 0x0000001ae100
