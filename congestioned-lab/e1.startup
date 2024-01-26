@@ -1,10 +1,11 @@
 ip link set eth0 address 00:00:00:e1:0a:00
-ip link set eth1 address 00:00:00:e1:c1:00
-ip link set eth2 address 00:00:00:e1:c2:00
-ip link set eth3 address 00:00:00:e1:1a:00
+ip link set eth1 address 00:00:00:e1:1a:00
+ip link set eth2 address 00:00:00:e1:c1:00
+ip link set eth3 address 00:00:00:e1:c2:00
 
-tc qdisc add dev eth1 root netem loss 10%
+
 tc qdisc add dev eth2 root netem loss 10%
+tc qdisc add dev eth3 root netem loss 10%
 
 make all
 simple_switch -i 1@eth0 -i 2@eth1 -i 3@eth2 -i 4@eth3 --log-file /var/log/bmv2 /build/srv6_livelive.json &

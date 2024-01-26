@@ -50,9 +50,9 @@ control IngressPipe(inout headers hdr,
 
         encapsulate_srv6(src_addr);
         hdr.srv6.tag = 1;
+
         // Tag the packet with a sequence number
         hdr.bridge.setValid();
-
         bit<32> flow_id = 0;
         hash(flow_id, HashAlgorithm.crc32, (bit<1>) 0, {hdr.ipv6_inner.src_addr, hdr.ipv6_inner.dst_addr, meta.l4_lookup.src_port, meta.l4_lookup.dst_port, hdr.ipv6_inner.next_hdr}, (bit<32>) MAX_NUM_FLOWS);
         bit<16> curr_seq_n = 0;
@@ -61,9 +61,15 @@ control IngressPipe(inout headers hdr,
         seq_n.write(flow_id, hdr.bridge.seq_n);
     }
 
-    action ipv6_encap_forward(bit<128> src_addr, bit<9> port) {
+    action ipv6_encap_forward_port(bit<128> src_addr, bit<9> port) {
         standard_metadata.egress_spec = port;
-        
+
+        encapsulate_srv6(src_addr);
+    }
+
+    action ipv6_encap_forward_random(bit<128> src_addr, bit<9> rand_lo, bit<9> rand_hi) {
+        random<bit<9>>(standard_metadata.egress_spec, rand_lo, rand_hi);
+
         encapsulate_srv6(src_addr);
     }
 
@@ -72,10 +78,11 @@ control IngressPipe(inout headers hdr,
             hdr.ipv6.src_addr: lpm;
         }
         actions = {
-            ipv6_encap_forward;
+            ipv6_encap_forward_random;
+            ipv6_encap_forward_port;
             live_live_mcast;
         }
-        default_action = ipv6_encap_forward(0, 1);
+        default_action = ipv6_encap_forward_random(0, 0, 0);
         size = MAX_NUM_ENTRIES;
     }
 
@@ -122,13 +129,15 @@ control IngressPipe(inout headers hdr,
             } else if (hdr.srv6.segment_left == 0) {
                 srv6_func_id = hdr.srv6_list[0].segment_id[63:0];
                 if(srv6_function.apply().hit) {
+                    log_msg("ll-pkt: {} {}", {hdr.srv6_ll_tlv.seq_n, standard_metadata.ingress_port});
                     bit<16> start_value;
                     flow_window_start.read(start_value, hdr.srv6_ll_tlv.flow_id);
                     bit<WINDOW_SIZE> curr_bitmap;
                     flow_to_bitmap.read(curr_bitmap, hdr.srv6_ll_tlv.flow_id);
 
+                    bit<1> to_drop = 0;
                     if (hdr.srv6_ll_tlv.seq_n > start_value + (WINDOW_SIZE - 1)) {
-                        log_msg("hdr.srv6_ll_tlv.seq_n {}", {hdr.srv6_ll_tlv.seq_n});
+
                         log_msg("start_value: {}, WINDOW_SIZE: {}, start_value + WINDOW_SIZE {}", {start_value, (bit<8>) WINDOW_SIZE, start_value + WINDOW_SIZE});
 
                         bit<8> shift_idx = (bit<8>) (hdr.srv6_ll_tlv.seq_n - (WINDOW_SIZE - 1) - start_value);
@@ -139,14 +148,17 @@ control IngressPipe(inout headers hdr,
                         }
                         start_value = hdr.srv6_ll_tlv.seq_n - (WINDOW_SIZE - 1);
                         flow_window_start.write(hdr.srv6_ll_tlv.flow_id, start_value);
+                    } else if (hdr.srv6_ll_tlv.seq_n < start_value) {
+                        log_msg("start_value: {}", {start_value});
+                        to_drop = 0x1;
                     }
-                    
+
                     bit<8> window_idx = (bit<8>) (hdr.srv6_ll_tlv.seq_n - start_value);
-                    bit<64> idx_bitmask = (bit<64>) 1 << window_idx;
-                    bit<64> relevant_bit = curr_bitmap & idx_bitmask;
+                    bit<WINDOW_SIZE> idx_bitmask = (bit<WINDOW_SIZE>) 1 << window_idx;
+                    bit<WINDOW_SIZE> relevant_bit = curr_bitmap & idx_bitmask;
                     bit<1> already_received = (bit<1>) (relevant_bit >> window_idx);
 
-                    if (already_received == 1) {
+                    if (already_received == 1 || to_drop == 1) {
                         log_msg("Dropping packet of flow {} with index {}", {hdr.srv6_ll_tlv.flow_id, hdr.srv6_ll_tlv.seq_n});
                         mark_to_drop(standard_metadata);
                     } else {

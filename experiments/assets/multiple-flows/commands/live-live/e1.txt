@@ -8,3 +8,4 @@ table_add srv6_forward add_srv6_dest_segment 4 => c4::e2
 table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55
 table_add srv6_function srv6_ll_deduplicate 85 =>
 table_add ipv6_forward forward 2001::/64 => 1 0x0000000ae100
+table_add ipv6_forward forward 2003::/64 => 2 0x0000001ae100
