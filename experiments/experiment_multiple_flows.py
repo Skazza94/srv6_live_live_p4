@@ -123,13 +123,13 @@ def run_test(test_folder: str, delay: int, loss: float, test_number: int, number
     for idx, ip in enumerate(assigned_client_ips):
         iperf_clients_stats.append(kathara.exec(
             machine_name="client",
-            command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c {assigned_server_ips[idx]} -n 1MB -J -B {ip}'"),
+            command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c {assigned_server_ips[idx]} -n 10MB -J -B {ip}'"),
             lab_hash=lab.hash
         ))
 
     exec_output = kathara.exec(
         machine_name="a",
-        command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c 2002::b -n 1MB -J'"),
+        command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c 2002::b -n 10MB -J'"),
         lab_hash=lab.hash
     )
 
