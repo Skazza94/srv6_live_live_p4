@@ -138,7 +138,7 @@ control IngressPipe(inout headers hdr,
                     bit<1> to_drop = 0;
                     if (hdr.srv6_ll_tlv.seq_n > start_value + (WINDOW_SIZE - 1)) {
 
-                        log_msg("start_value: {}, WINDOW_SIZE: {}, start_value + WINDOW_SIZE {}", {start_value, (bit<8>) WINDOW_SIZE, start_value + WINDOW_SIZE});
+                        // log_msg("start_value: {}, WINDOW_SIZE: {}, start_value + WINDOW_SIZE {}", {start_value, (bit<8>) WINDOW_SIZE, start_value + WINDOW_SIZE});
 
                         bit<8> shift_idx = (bit<8>) (hdr.srv6_ll_tlv.seq_n - (WINDOW_SIZE - 1) - start_value);
                         if (shift_idx > 63) {
@@ -149,7 +149,7 @@ control IngressPipe(inout headers hdr,
                         start_value = hdr.srv6_ll_tlv.seq_n - (WINDOW_SIZE - 1);
                         flow_window_start.write(hdr.srv6_ll_tlv.flow_id, start_value);
                     } else if (hdr.srv6_ll_tlv.seq_n < start_value) {
-                        log_msg("start_value: {}", {start_value});
+                        // log_msg("start_value: {}", {start_value});
                         to_drop = 0x1;
                     }
                     
@@ -159,10 +159,10 @@ control IngressPipe(inout headers hdr,
                     bit<1> already_received = (bit<1>) (relevant_bit >> window_idx);
 
                     if (already_received == 1 || to_drop == 1) {
-                        log_msg("Dropping packet of flow {} with index {}", {hdr.srv6_ll_tlv.flow_id, hdr.srv6_ll_tlv.seq_n});
+                        // log_msg("Dropping packet of flow {} with index {}", {hdr.srv6_ll_tlv.flow_id, hdr.srv6_ll_tlv.seq_n});
                         mark_to_drop(standard_metadata);
                     } else {
-                        log_msg("Forwarding packet of flow {} with index {}", {hdr.srv6_ll_tlv.flow_id, hdr.srv6_ll_tlv.seq_n});
+                        // log_msg("Forwarding packet of flow {} with index {}", {hdr.srv6_ll_tlv.flow_id, hdr.srv6_ll_tlv.seq_n});
 
                         curr_bitmap = curr_bitmap | idx_bitmask;
                         flow_to_bitmap.write(hdr.srv6_ll_tlv.flow_id, curr_bitmap);

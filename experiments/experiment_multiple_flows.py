@@ -3,6 +3,7 @@ import json
 import logging
 import os.path
 import shlex
+import shutil
 import statistics
 import sys
 import time
@@ -88,6 +89,19 @@ def run_test(test_folder: str, delay: int, loss: float, test_number: int, number
     kathara.deploy_lab(lab)
     time.sleep(5)
 
+    logging.info("Dumping e2 iperf server...")
+    kathara.exec(
+        machine_name="e2",
+        command=shlex.split("/bin/bash -c 'tcpdump -tenni eth0 -w /shared/e20.pcap \"ether[74:4] == 0x55\"'"),
+        lab_hash=lab.hash
+    )
+
+    kathara.exec(
+        machine_name="e2",
+        command=shlex.split("/bin/bash -c 'tcpdump -tenni eth1 -w /shared/e21.pcap \"ether[74:4] == 0x55\"'"),
+        lab_hash=lab.hash
+    )
+
     logging.info("Launching live-live iperf server...")
     kathara.exec(
         machine_name="b",
@@ -142,6 +156,13 @@ def run_test(test_folder: str, delay: int, loss: float, test_number: int, number
 
     logging.info("Undeploying lab...")
     kathara.undeploy_lab(lab=lab)
+
+    pcaps_dir = os.path.join(test_folder, "pcaps", str(test_number))
+    os.makedirs(pcaps_dir, exist_ok=True)
+
+    shutil.move(os.path.join(test_lab_path, "shared", "e20.pcap"), os.path.join(pcaps_dir, "e20.pcap"))
+
+    shutil.move(os.path.join(test_lab_path, "shared", "e21.pcap"), os.path.join(pcaps_dir, "e21.pcap"))
 
     logging.info("Removing test lab...")
     remove_tree(test_lab_path)
