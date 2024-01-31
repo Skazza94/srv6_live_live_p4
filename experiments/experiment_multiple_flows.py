@@ -82,7 +82,7 @@ def run_test(test_folder: str, test_number: int, number_of_flows: int):
     logging.info("Deploying lab...")
     kathara.deploy_lab(lab)
     time.sleep(5)
-    Kathara.get_instance().connect_tty("e1", lab=lab)
+
     logging.info("Dumping e2 iperf server...")
 
     tcpdump_pid_1 = get_output(kathara.exec(
@@ -123,6 +123,7 @@ def run_test(test_folder: str, test_number: int, number_of_flows: int):
             lab_hash=lab.hash
         ))
 
+    logging.info("Launching live-live iperf client...")
     exec_output = kathara.exec(
         machine_name="a",
         command=shlex.split(f"/bin/bash -c 'iperf3 -6 -c 2002::b -n 10MB -J'"),
@@ -186,14 +187,14 @@ if __name__ == '__main__':
 
     for test_type in [
         'live-live',
-        # 'baseline'
+        'baseline'
     ]:
         test_type_path = os.path.join(result_path, test_type)
         if not os.path.isdir(test_type_path):
             os.makedirs(test_type_path, exist_ok=True)
 
         logging.info(f"Running {test_type} experiments...")
-        for flows in [30]:
+        for flows in [1, 5, 10, 20, 50, 100]:
             logging.info(f"\t- Concurrent flows: {flows}")
             test_folder = os.path.join(test_type_path, str(flows))
             if not os.path.isdir(test_folder):
