@@ -29,7 +29,7 @@ def get_output(exec_output):
     return output
 
 
-def run_test(test_folder: str, delay: int, loss: float, test_number: int, number_of_flows: int):
+def run_test(test_folder: str, test_number: int, number_of_flows: int):
     lab_path = "lab_multiple_flows"
     test_lab_path = "test_lab"
 
@@ -46,18 +46,6 @@ def run_test(test_folder: str, delay: int, loss: float, test_number: int, number
     lab = LabParser.parse(test_lab_path)
 
     logging.info("Adding congestion...")
-
-    lab.write_line_after(
-        file_path="e1.startup",
-        line_to_add=f"tc qdisc add dev eth1 root netem loss {loss}% delay {delay}ms",
-        searched_line="ip link set eth2 address 00:00:00:e1:c2:00"
-    )
-
-    lab.write_line_after(
-        file_path="e1.startup",
-        line_to_add=f"tc qdisc add dev eth2 root netem loss {loss}% delay {delay}ms",
-        searched_line=f"tc qdisc add dev eth1 root netem loss {loss}% delay {delay}ms"
-    )
 
     e1 = lab.get_machine("e1")
     e1.create_file_from_path(os.path.join('assets', 'multiple-flows',
@@ -85,22 +73,30 @@ def run_test(test_folder: str, delay: int, loss: float, test_number: int, number
                              searched_line=f"ip addr add 2004::1b/64 dev eth0")
         assigned_server_ips.append(ip)
 
+    lab.write_line_after(
+        file_path="e1.startup",
+        line_to_add=f"tc qdisc add dev eth3 root tbf rate 10Mbit buffer 2kb latency 10ms",
+        searched_line="ip link set eth3 address 00:00:00:e1:c2:00"
+    )
+
     logging.info("Deploying lab...")
     kathara.deploy_lab(lab)
     time.sleep(5)
-
+    Kathara.get_instance().connect_tty("e1", lab=lab)
     logging.info("Dumping e2 iperf server...")
-    kathara.exec(
-        machine_name="e2",
-        command=shlex.split("/bin/bash -c 'tcpdump -tenni eth0 -w /shared/e20.pcap \"ether[74:4] == 0x55\"'"),
-        lab_hash=lab.hash
-    )
 
-    kathara.exec(
+    tcpdump_pid_1 = get_output(kathara.exec(
         machine_name="e2",
-        command=shlex.split("/bin/bash -c 'tcpdump -tenni eth1 -w /shared/e21.pcap \"ether[74:4] == 0x55\"'"),
+        command=shlex.split("/bin/bash -c 'tcpdump -tenni eth0 -w /shared/e20.pcap \"ether[74:4] == 0x55\" & echo $!'"),
         lab_hash=lab.hash
-    )
+    )).strip()
+
+    tcpdump_pid_2 = get_output(
+        kathara.exec(
+        machine_name="e2",
+        command=shlex.split("/bin/bash -c 'tcpdump -tenni eth1 -w /shared/e21.pcap \"ether[74:4] == 0x55\" & echo $!'"),
+        lab_hash=lab.hash
+    )).strip()
 
     logging.info("Launching live-live iperf server...")
     kathara.exec(
@@ -137,21 +133,29 @@ def run_test(test_folder: str, delay: int, loss: float, test_number: int, number
     output = get_output(exec_output)
     iperf_clients_stats = list(map(lambda x: json.loads(get_output(x)), iperf_clients_stats))
 
-    if test_type == "live-live":
-        exec_output = get_output(kathara.exec(
-            machine_name="e2",
-            command=shlex.split(
-                "/bin/bash -c 'find /var/log -name bmv2* -exec cat {} \; | grep ll-pkt | grep -v log | cut -d \" \" -f 7-'"),
-            lab_hash=lab.hash
-        ))
+    logging.info("Stop dumping interfaces...")
+    kathara.exec(
+        machine_name="e1",
+        command=shlex.split(f"/bin/bash -c 'kill -15 {tcpdump_pid_1}'"),
+        lab_hash=lab.hash
+    )
 
-        with open(os.path.join(test_folder, f"ll_seqn_test_{test_number}.json"), 'w') as test_result:
-            test_result.write(exec_output)
+    kathara.exec(
+        machine_name="e2",
+        command=shlex.split(f"/bin/bash -c 'kill -15 {tcpdump_pid_2}'"),
+        lab_hash=lab.hash
+    )
 
-    with open(os.path.join(test_folder, f"iperf_clients_test_{test_number}.json"), 'w') as test_result:
+    concurrent_flows_results = os.path.join(test_folder, "concurrent-flows")
+    os.makedirs(concurrent_flows_results, exist_ok=True)
+    with open(
+            os.path.join(concurrent_flows_results, f"iperf_clients_test_{test_number}.json"), 'w') as test_result:
         test_result.write(json.dumps(iperf_clients_stats))
 
-    with open(os.path.join(test_folder, f"test_{test_number}.json"), 'w') as test_result:
+    ll_flow_result = os.path.join(test_folder, "ll-flow")
+    os.makedirs(ll_flow_result, exist_ok=True)
+    with open(
+            os.path.join(ll_flow_result, f"test_{test_number}.json"), 'w') as test_result:
         test_result.write(output)
 
     logging.info("Undeploying lab...")
@@ -169,49 +173,32 @@ def run_test(test_folder: str, delay: int, loss: float, test_number: int, number
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
+    if len(sys.argv) != 3:
         print(
-            "Usage: experiment.py <result_path> <n_runs> <n_flows>"
+            "Usage: experiment.py <result_path> <n_runs>"
         )
         exit(1)
 
     result_path = os.path.abspath(sys.argv[1])
     n_runs = int(sys.argv[2])
-    n_flows = int(sys.argv[3])
 
     set_logging()
 
     for test_type in [
         'live-live',
-        'baseline'
+        # 'baseline'
     ]:
         test_type_path = os.path.join(result_path, test_type)
         if not os.path.isdir(test_type_path):
             os.makedirs(test_type_path, exist_ok=True)
 
         logging.info(f"Running {test_type} experiments...")
-        delay_path = os.path.join(test_type_path, "delay")
-        if not os.path.isdir(delay_path):
-            os.mkdir(delay_path)
-        for delay in range(10, 20, 10):
-            logging.info(f"\t- DELAY: {delay}")
-            test_folder = os.path.join(delay_path, str(delay))
+        for flows in [30]:
+            logging.info(f"\t- Concurrent flows: {flows}")
+            test_folder = os.path.join(test_type_path, str(flows))
             if not os.path.isdir(test_folder):
                 os.mkdir(test_folder)
 
             for run in range(1, n_runs + 1):
                 logging.info(f"Starting run {run}")
-                run_test(test_folder, delay, 0, run, n_flows)
-
-        # loss_path = os.path.join(test_type_path, "loss")
-        # if not os.path.isdir(loss_path):
-        #     os.mkdir(loss_path)
-        # for loss in range(1, 11, 1):
-        #     logging.info(f"\t- LOSS: {loss}%")
-        #     test_folder = os.path.join(loss_path, str(loss))
-        #     if not os.path.isdir(test_folder):
-        #         os.mkdir(test_folder)
-        #
-        #     for run in range(1, n_runs + 1):
-        #         logging.info(f"Starting run {run}")
-        #         run_test(test_folder, 100, loss, run)
+                run_test(test_folder, run, flows)
