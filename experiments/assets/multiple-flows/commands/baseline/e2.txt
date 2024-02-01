@@ -1,6 +1,8 @@
 table_add check_live_live_enabled ipv6_encap_forward_port 2002::/64 => e2::2 1
 table_add check_live_live_enabled ipv6_encap_forward_port 2004::/64 => e2::2 2
+table_add check_live_live_enabled ipv6_encap_forward_port 2006::/64 => e2::2 1
 table_add srv6_forward add_srv6_dest_segment 1 => c1::e1
 table_add srv6_forward add_srv6_dest_segment 2 => c2::e1
 table_add ipv6_forward forward 2002::/64 => 3  0x0000000be200
 table_add ipv6_forward forward 2004::/64 => 4  0x0000001be200
+table_add ipv6_forward forward 2006::/64 => 4  0x0000001be200

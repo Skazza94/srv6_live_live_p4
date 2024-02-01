@@ -29,7 +29,7 @@ def get_output(exec_output):
     return output
 
 
-def run_test(test_folder: str, test_number: int, number_of_flows: int):
+def run_test(test_folder: str, test_number: int, number_of_flows_active: int, number_of_flows_backup: int):
     lab_path = "lab_multiple_flows"
     test_lab_path = "test_lab"
 
@@ -55,19 +55,35 @@ def run_test(test_folder: str, test_number: int, number_of_flows: int):
     e2.create_file_from_path(os.path.join('assets', 'multiple-flows',
                                           'commands', test_type, 'e2.txt'), 'commands.txt')
 
-    logging.info("Generating ips for client...")
+    logging.info("Generating ips for client on backup path...")
     available_client_ips = ipaddress.ip_network("2003::/64").hosts()
     assigned_client_ips = []
-    for idx in range(0, number_of_flows):
+    for idx in range(0, number_of_flows_backup):
         ip = next(available_client_ips)
         lab.write_line_after("client.startup", line_to_add=f"ip addr add {ip} dev eth0",
                              searched_line=f"ip addr add 2003::1a/64 dev eth0")
         assigned_client_ips.append(ip)
 
-    logging.info("Generating ips for server...")
+    logging.info("Generating ips for server on backup path...")
     available_server_ips = ipaddress.ip_network("2004::/64").hosts()
     assigned_server_ips = []
-    for idx in range(0, number_of_flows):
+    for idx in range(0, number_of_flows_backup):
+        ip = next(available_server_ips)
+        lab.write_line_after("server.startup", line_to_add=f"ip addr add {ip} dev eth0",
+                             searched_line=f"ip addr add 2004::1b/64 dev eth0")
+        assigned_server_ips.append(ip)
+
+    logging.info("Generating ips for client on active path...")
+    available_client_ips = ipaddress.ip_network("2005::/64").hosts()
+    for idx in range(0, number_of_flows_active):
+        ip = next(available_client_ips)
+        lab.write_line_after("client.startup", line_to_add=f"ip addr add {ip} dev eth0",
+                             searched_line=f"ip addr add 2003::1a/64 dev eth0")
+        assigned_client_ips.append(ip)
+
+    logging.info("Generating ips for server on backup path...")
+    available_server_ips = ipaddress.ip_network("2006::/64").hosts()
+    for idx in range(0, number_of_flows_active):
         ip = next(available_server_ips)
         lab.write_line_after("server.startup", line_to_add=f"ip addr add {ip} dev eth0",
                              searched_line=f"ip addr add 2004::1b/64 dev eth0")
@@ -202,4 +218,4 @@ if __name__ == '__main__':
 
             for run in range(1, n_runs + 1):
                 logging.info(f"Starting run {run}")
-                run_test(test_folder, run, flows)
+                run_test(test_folder, run, int(flows/2), flows)

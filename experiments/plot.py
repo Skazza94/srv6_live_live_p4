@@ -240,9 +240,10 @@ def plot_concurrent_flows_fct_figure(results_path: str):
     def plot_concurrent_flows_line(experiment_type: str, color: str, marker: str):
         to_plot = {'x': [], 'y': [], 'dy': []}
         path = os.path.join(results_path, experiment_type)
-        for number_of_flows in sorted(os.listdir(path)):
-            if number_of_flows == "0":
+        for number_of_flows in sorted(os.listdir(path), key=lambda x: int(x)):
+            if number_of_flows == "0" or number_of_flows == "100":
                 continue
+            print(experiment_type, number_of_flows)
             test_path = os.path.join(path, number_of_flows)
             ll_flow_path = os.path.join(test_path, "concurrent-flows")
             test_seconds = []
@@ -251,7 +252,8 @@ def plot_concurrent_flows_fct_figure(results_path: str):
                 with open(file_path, "r") as stats_file:
                     stats = json.load(stats_file)
                 for stat in stats:
-                    test_seconds.append(stat['end']['streams'][0]['sender']['seconds'])
+                    if stat and 'end' in stat and 'streams' in stat['end']:
+                        test_seconds.append(stat['end']['streams'][0]['sender']['seconds'])
             to_plot['x'].append(number_of_flows)
             to_plot['y'].append(statistics.mean(test_seconds))
             to_plot['dy'].append(statistics.stdev(test_seconds))
@@ -279,7 +281,7 @@ def plot_live_live_fct_figure(results_path: str):
     def plot_ll_line(experiment_type, color: str, marker: str):
         path = os.path.join(results_path, experiment_type)
         to_plot = {'x': [], 'y': [], 'dy': []}
-        for number_of_flows in sorted(os.listdir(path)):
+        for number_of_flows in sorted(os.listdir(path), key=lambda x: int(x)):
             test_path = os.path.join(path, number_of_flows)
             ll_flow_path = os.path.join(test_path, "ll-flow")
             test_seconds = []
@@ -323,20 +325,20 @@ def plot_live_live_seqn_figure(results_path: str):
         to_plot_1['y'] = list(map(lambda x: x[1], eth0_seq_n))
         plt.plot(
             to_plot_1['x'], to_plot_1['y'], label="active", linestyle='dashed', fillstyle='none', color="green",
-            marker="o"
+            marker=None
         )
 
         to_plot_2['x'] = list(map(lambda x: x[0], eth1_seq_n))
         to_plot_2['y'] = list(map(lambda x: x[1], eth1_seq_n))
         plt.plot(
             to_plot_2['x'], to_plot_2['y'], label="backup", linestyle='dashed', fillstyle='none', color="blue",
-            marker="x"
+            marker=None
         )
 
 
     plt.clf()
 
-    plot_seq_n_line("30")
+    plot_seq_n_line("10")
 
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.28), labelspacing=0.2, ncols=2, prop={'size': 8})
 
