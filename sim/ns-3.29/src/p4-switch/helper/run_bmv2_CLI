@@ -1,0 +1,30 @@
+#!/usr/bin/python3
+
+import sys, os, io
+import subprocess
+import argparse
+import tempfile
+
+def run_CLI(thrift_port, cli_input_commands, log_dir):
+    cli = 'simple_switch_CLI'
+    print('Configuring bmv2 pipeline on port {} with commands "{}"'.format(thrift_port, cli_input_commands))
+    with tempfile.TemporaryFile() as fin:
+        fin.write(cli_input_commands.encode('utf-8'))
+        fin.seek(0)
+
+        cli_outfile = os.path.join(log_dir, 'bmv2-{}-cli-output.log'.format(thrift_port))
+        with open(cli_outfile, 'w') as fout:
+            p = subprocess.Popen([cli, '--thrift-port', str(thrift_port)], stdin=fin, stdout=fout)
+            p.wait()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--thrift_port', help='the thrift port to connect to',
+                        type=int, required=False, default=9090)
+    parser.add_argument('-o', '--log_dir', help='the directory to populate with log files',
+                        type=str, required=False, default='/tmp')
+    parser.add_argument('commands', help='commands for the CLI',
+                        type=str)
+    args = parser.parse_args()
+
+    run_CLI(args.thrift_port, args.commands, args.log_dir)

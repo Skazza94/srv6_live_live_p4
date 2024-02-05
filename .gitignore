@@ -7,3 +7,7 @@ experiments/test_lab*
 experiments/*/shared/test_*.json
 *-lab/shared/test_*.json
 */__pycache__/
+__pycache__
+*.pyc
+lab/shared/*
+.vscode/
