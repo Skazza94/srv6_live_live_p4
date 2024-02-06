@@ -40,6 +40,8 @@ control IngressPipe(inout headers hdr,
                     }
                 }
             }
+        } else {
+            mark_to_drop(standard_metadata);
         }
     }
 }

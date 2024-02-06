@@ -125,7 +125,11 @@ control IngressPipe(inout headers hdr,
     apply {
         if (hdr.ipv6.isValid()) {
             if (!hdr.srv6.isValid()) {
-                check_live_live_enabled.apply();
+                if (hdr.tcp.isValid() || hdr.udp.isValid() || hdr.ipv6_inner.isValid()) {
+                    check_live_live_enabled.apply();
+                } else {
+                    mark_to_drop(standard_metadata);
+                }
             } else if (hdr.srv6.segment_left == 0) {
                 srv6_func_id = hdr.srv6_list[0].segment_id[63:0];
                 if(srv6_function.apply().hit) {
@@ -193,6 +197,8 @@ control IngressPipe(inout headers hdr,
                     ipv6_forward.apply();
                 }
             }
+        } else {
+            mark_to_drop(standard_metadata);
         }
     }
 }

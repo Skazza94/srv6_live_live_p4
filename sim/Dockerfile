@@ -24,27 +24,21 @@ make && make install && \
 update-alternatives --install /usr/bin/python python /usr/bin/python2.7 10 && \
 update-alternatives --set python /usr/bin/python2.7
 
-RUN git clone https://gitlab.com/nsnam/ns-3-allinone.git && \
-    cd ns-3-allinone && \
-    ./download.py -n ns-3.29 && \
-    cd ns-3.29 && \
-    CXXFLAGS="-W -Wall -g" ./waf configure --enable-examples && \
-    ./waf build
+RUN apt update && apt install -y gdb cmake
 
-COPY ns-3.29/src/p4-switch /ns3/ns-3-allinone/ns-3.29/src/p4-switch
-COPY ns-3.29/src/wscript /ns3/ns-3-allinone/ns-3.29/src/wscript
+COPY ns-3.40 /ns3/ns-3.40
 
-RUN cd ns-3-allinone/ns-3.29 && \
-    CXXFLAGS="-W -Wall -g" ./waf configure --enable-examples && \
-    ./waf build
+RUN cd ns-3.40 && \
+    CXXFLAGS="-W -Wall -g" ./ns3 configure --enable-examples && \
+    ./ns3 build
 
 RUN rm -Rf Python-2.7.18* && \
     apt remove -y mercurial && \
     apt clean && \
     rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
 
-RUN chmod +x /ns3/ns-3-allinone/ns-3.29/src/p4-switch/helper/run_bmv2_CLI
+RUN chmod +x /ns3/ns-3.40/src/p4-switch/helper/run_bmv2_CLI
 
-ENV PATH="$PATH:/ns3/ns-3-allinone/ns-3.29/src/p4-switch/helper"
+ENV PATH="$PATH:/ns3/ns-3.40/src/p4-switch/helper"
 
 VOLUME /ns3/assets
