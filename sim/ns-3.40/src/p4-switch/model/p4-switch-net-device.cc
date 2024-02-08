@@ -139,7 +139,7 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
         Ptr<NetDevice> port = GetPort(item.first);
         if (!port)
         {
-            NS_LOG_DEBUG("Port not found, dropping packet");
+            NS_LOG_DEBUG("Port " << item.first << " not found, dropping packet");
             continue;
         }
 
@@ -234,7 +234,7 @@ Ptr<NetDevice>
 P4SwitchNetDevice::GetPort(uint32_t n) const
 {
     NS_LOG_FUNCTION_NOARGS();
-    if (n <= 0)
+    if (n <= 0 || n > GetNPorts())
     {
         return nullptr;
     }

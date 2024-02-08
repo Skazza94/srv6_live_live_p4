@@ -7,3 +7,13 @@ build_lib_example(
     ${libapplications}
     ${libp4-switch}
 )
+
+build_lib_example(
+  NAME live-live-example
+  SOURCE_FILES live-live-example.cc
+  LIBRARIES_TO_LINK
+    ${libcsma}
+    ${libinternet}
+    ${libapplications}
+    ${libp4-switch}
+)

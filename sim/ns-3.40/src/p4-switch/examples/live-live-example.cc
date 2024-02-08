@@ -39,10 +39,10 @@ main(int argc, char* argv[])
 
     NS_LOG_INFO("Create nodes.");
     NodeContainer terminals;
-    terminals.Create(4);
+    terminals.Create(2);
 
-    NodeContainer csmaSwitch;
-    csmaSwitch.Create(1);
+    NodeContainer switches;
+    switches.Create(4);
 
     NS_LOG_INFO("Build Topology");
     CsmaHelper csma;
@@ -50,30 +50,82 @@ main(int argc, char* argv[])
     csma.SetChannelAttribute("Delay", TimeValue(MilliSeconds(2)));
 
     NetDeviceContainer terminalDevices;
-    NetDeviceContainer switchDevices;
-    for (int i = 0; i < 4; i++)
-    {
-        NetDeviceContainer link = csma.Install(NodeContainer(terminals.Get(i), csmaSwitch));
-        terminalDevices.Add(link.Get(0));
-        switchDevices.Add(link.Get(1));
-    }
+    NetDeviceContainer e1Interfaces;
+    NetDeviceContainer e2Interfaces;
+    NetDeviceContainer c1Interfaces;
+    NetDeviceContainer c2Interfaces;
 
-    Ptr<Node> switchNode = csmaSwitch.Get(0);
-    P4SwitchHelper p4switch;
-    p4switch.SetDeviceAttribute(
+    NetDeviceContainer link = csma.Install(NodeContainer(terminals.Get(0), switches.Get(0)));
+    terminalDevices.Add(link.Get(0));
+    e1Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(switches.Get(0), switches.Get(1)));
+    e1Interfaces.Add(link.Get(0));
+    c1Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(switches.Get(0), switches.Get(2)));
+    e1Interfaces.Add(link.Get(0));
+    c2Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(switches.Get(1), switches.Get(3)));
+    c1Interfaces.Add(link.Get(0));
+    e2Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(switches.Get(2), switches.Get(3)));
+    c2Interfaces.Add(link.Get(0));
+    e2Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(terminals.Get(1), switches.Get(3)));
+    terminalDevices.Add(link.Get(0));
+    e2Interfaces.Add(link.Get(1));
+
+
+    P4SwitchHelper liveliveHelper;
+    liveliveHelper.SetDeviceAttribute(
         "PipelineJson",
         StringValue("/ns3/ns-3.40/src/p4-switch/examples/livelive_build/srv6_livelive.json"));
-    p4switch.SetDeviceAttribute(
+    liveliveHelper.SetDeviceAttribute(
         "PipelineCommands",
         StringValue(
-            "mc_mgrp_create 1\nmc_node_create 1 2 3\nmc_node_associate 1 0\ntable_add "
-            "check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2\ntable_set_default "
-            "check_live_live_enabled ipv6_encap_forward e1::2 2\ntable_add srv6_forward "
-            "add_srv6_dest_segment 2 => c3::e2\ntable_add srv6_forward add_srv6_dest_segment 3 => "
-            "c4::e2\ntable_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55\ntable_add "
-            "srv6_function srv6_ll_deduplicate 85 => \ntable_add ipv6_forward forward 2001::/64 => "
-            "1 0x0000000ae100"));
-    p4switch.Install(switchNode, switchDevices);
+            "mc_mgrp_create 1\nmc_node_create 1 2 3\nmc_node_associate 1 0\n"
+            "table_add check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2\n"
+            "table_set_default check_live_live_enabled ipv6_encap_forward e1::2 2\n"
+            // "table_add srv6_forward add_srv6_dest_segment 2 => c1::e2\n"
+            // "table_add srv6_forward add_srv6_dest_segment 3 => c2::e2\n"
+            "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55\n"
+            "table_add srv6_function srv6_ll_deduplicate 85 => \n"
+            "table_add ipv6_forward forward 2001::/64 => 1 0x0000000ae100"));
+
+    Ptr<Node> e1 = switches.Get(0);
+    liveliveHelper.Install(e1, e1Interfaces);
+
+    liveliveHelper.SetDeviceAttribute(
+       "PipelineCommands",
+       StringValue(
+           "mc_mgrp_create 1\nmc_node_create 1 1 2\nmc_node_associate 1 0\n"
+           "table_add srv6_function srv6_ll_deduplicate 85 => \n"
+           "table_add ipv6_forward forward 2001::2/64 => 3  0x0000000be200\n"
+           "table_add check_live_live_enabled live_live_mcast 2001::2/64 => 1 e2::2\n"
+           "table_set_default check_live_live_enabled ipv6_encap_forward e2::2 1\n"
+           "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55"));
+
+    Ptr<Node> e2 = switches.Get(3);
+    liveliveHelper.Install(e2, e2Interfaces);
+
+    P4SwitchHelper forwardHelper;
+    forwardHelper.SetDeviceAttribute(
+        "PipelineJson",
+        StringValue("/ns3/ns-3.40/src/p4-switch/examples/forward_build/srv6_forward.json"));
+    forwardHelper.SetDeviceAttribute(
+        "PipelineCommands",
+        StringValue(
+        "table_add srv6_table srv6_noop 2001::1/64 => 2\n"
+        "table_add srv6_table srv6_noop 2001::2/64 => 1"));
+    Ptr<Node> c1 = switches.Get(1);
+    forwardHelper.Install(c1, c1Interfaces);
+
+    Ptr<Node> c2 = switches.Get(2);
+    forwardHelper.Install(c2, c2Interfaces);
 
     InternetStackHelper internetV6only;
     internetV6only.SetIpv4StackInstall(false);
