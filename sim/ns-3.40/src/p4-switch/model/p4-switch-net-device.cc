@@ -143,33 +143,22 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
             continue;
         }
 
-        // WARNING: out_pkt is a Payload-only buffer, we lose all the original Packet metadata
+        // WARNING: out_pkt is a reconstructed Packet in p4-pipeline.
+        // We try to infer known headers, but if something is missing you have to add the parsing
+        // logic there
         Ptr<Packet> out_pkt = item.second;
-        // Copy and remove the raw Ethernet header, we fill the fields manually for the SendFrom
-        uint8_t* raw_eth_dst = new uint8_t[6];
-        out_pkt->CopyData(raw_eth_dst, 6);
-        out_pkt->RemoveAtStart(6);
-        Mac48Address out_pkt_dst;
-        out_pkt_dst.CopyFrom(raw_eth_dst);
-        delete (raw_eth_dst);
+        // Remove the Ethernet header for the SendFrom
+        EthernetHeader eth_hdr_out;
+        out_pkt->RemoveHeader(eth_hdr_out);
 
-        uint8_t* raw_eth_src = new uint8_t[6];
-        out_pkt->CopyData(raw_eth_src, 6);
-        out_pkt->RemoveAtStart(6);
-        Mac48Address out_pkt_src;
-        out_pkt_src.CopyFrom(raw_eth_src);
-        delete (raw_eth_src);
+        NS_LOG_DEBUG("Forwarding pkt "
+                     << out_pkt << " to port " << item.first << " " << eth_hdr_out.GetDestination()
+                     << " " << eth_hdr_out.GetSource() << " " << eth_hdr_out.GetLengthType());
 
-        uint8_t* raw_eth_type = new uint8_t[2];
-        out_pkt->CopyData(raw_eth_type, 2);
-        out_pkt->RemoveAtStart(2);
-        uint16_t out_pkt_type = raw_eth_type[0] << 8 | raw_eth_type[1];
-        delete (raw_eth_type);
-
-        NS_LOG_DEBUG("Forwarding pkt " << out_pkt << " to port " << item.first << " " << out_pkt_dst
-                                       << " " << out_pkt_src << " " << out_pkt_type);
-
-        port->SendFrom(out_pkt, out_pkt_src, out_pkt_dst, out_pkt_type);
+        port->SendFrom(out_pkt,
+                       eth_hdr_out.GetDestination(),
+                       eth_hdr_out.GetSource(),
+                       eth_hdr_out.GetLengthType());
     }
 
     delete pkts;

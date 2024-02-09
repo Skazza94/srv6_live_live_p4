@@ -36,6 +36,8 @@
 #include <thread>
 
 #include "p4-pipeline.h"
+#include "ns3/ethernet-header.h"
+#include "ns3/ipv6-header.h"
 
 extern int import_primitives();
 
@@ -325,8 +327,29 @@ namespace ns3
   Ptr<Packet>
   P4Pipeline::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
   {
-    char *bm_buf = bm_packet.get()->data();
+    uint8_t *bm_buf = (uint8_t *) bm_packet.get()->data();
     size_t len = bm_packet.get()->get_data_size();
-    return Create<Packet>((uint8_t *)(bm_buf), len);
+
+    Buffer b;
+    b.AddAtStart(len);
+    b.Begin().Write(bm_buf, len);
+
+    Buffer::Iterator it = b.Begin();
+    EthernetHeader eth;
+    eth.Deserialize(it);
+
+    Ipv6Header ipv6;
+    it.Next(eth.GetSerializedSize());
+    ipv6.Deserialize(it);
+
+    Ptr<Packet> p = Create<Packet>(bm_buf + 14 + 40, len - 14 - 40);
+    /* Headers are added in reverse order */
+    p->AddHeader(ipv6);
+    p->AddHeader(eth);
+
+    p->Print(std::cout);
+    std::cout << std::endl;
+
+    return p;
   }
 } // namespace ns3
