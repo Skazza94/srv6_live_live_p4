@@ -156,8 +156,8 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
                      << " " << eth_hdr_out.GetSource() << " " << eth_hdr_out.GetLengthType());
 
         port->SendFrom(out_pkt,
-                       eth_hdr_out.GetDestination(),
                        eth_hdr_out.GetSource(),
+                       eth_hdr_out.GetDestination(),
                        eth_hdr_out.GetLengthType());
     }
 

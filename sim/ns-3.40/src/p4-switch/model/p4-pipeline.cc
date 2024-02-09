@@ -37,6 +37,8 @@
 
 #include "p4-pipeline.h"
 #include "ns3/ethernet-header.h"
+#include "ns3/tcp-header.h"
+#include "ns3/udp-header.h"
 #include "ns3/ipv6-header.h"
 
 extern int import_primitives();
@@ -337,18 +339,39 @@ namespace ns3
     Buffer::Iterator it = b.Begin();
     EthernetHeader eth;
     eth.Deserialize(it);
+    it.Next(eth.GetSerializedSize());
 
     Ipv6Header ipv6;
-    it.Next(eth.GetSerializedSize());
     ipv6.Deserialize(it);
+    it.Next(ipv6.GetSerializedSize());
 
-    Ptr<Packet> p = Create<Packet>(bm_buf + 14 + 40, len - 14 - 40);
+    TcpHeader tcp;
+    UdpHeader udp;
+    int toSkip;
+    if (ipv6.GetNextHeader() == 6) {
+      tcp.Deserialize(it);
+      it.Next(tcp.GetSerializedSize());
+      toSkip = 32;
+    } else if (ipv6.GetNextHeader() == 17) {
+      udp.Deserialize(it);
+      it.Next(udp.GetSerializedSize());
+      toSkip = 8;
+    }
+
+    Ptr<Packet> p = Create<Packet>(bm_buf + 14 + 40 + toSkip, len - 14 - 40 - toSkip);
     /* Headers are added in reverse order */
+    if (ipv6.GetNextHeader() == 6)
+      p->AddHeader(tcp);
+    if (ipv6.GetNextHeader() == 17)
+      p->AddHeader(udp);
     p->AddHeader(ipv6);
     p->AddHeader(eth);
 
+    std::cout << "###################################" << std::endl;
     p->Print(std::cout);
     std::cout << std::endl;
+    std::cout << "###################################" << std::endl;
+
 
     return p;
   }
