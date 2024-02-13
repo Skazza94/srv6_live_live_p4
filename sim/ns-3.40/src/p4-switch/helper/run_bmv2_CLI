@@ -7,7 +7,6 @@ import tempfile
 
 def run_CLI(thrift_port, cli_input_commands, log_dir):
     cli = 'simple_switch_CLI'
-    print('Configuring bmv2 pipeline on port {} with commands "{}"'.format(thrift_port, cli_input_commands))
     with tempfile.TemporaryFile() as fin:
         fin.write(cli_input_commands.encode('utf-8'))
         fin.seek(0)

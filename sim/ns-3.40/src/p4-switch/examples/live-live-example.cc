@@ -20,6 +20,8 @@
 #include "ns3/internet-module.h"
 #include "ns3/network-module.h"
 #include "ns3/p4-switch-module.h"
+#include "ns3/flow-monitor-module.h"
+#include "ns3/flow-monitor-helper.h"
 
 #include <fstream>
 #include <iostream>
@@ -44,10 +46,8 @@ std::string getMacString(uint8_t *mac) {
 int
 main(int argc, char *argv[]) {
     LogComponentEnable("LiveLiveExample", LOG_LEVEL_INFO);
-    LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
-    LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
-
-    GlobalValue::Bind("ChecksumEnabled", BooleanValue(true));
+//    LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+//    LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
 
     CommandLine cmd;
     cmd.Parse(argc, argv);
@@ -79,27 +79,27 @@ main(int argc, char *argv[]) {
     NetDeviceContainer c1Interfaces;
     NetDeviceContainer c2Interfaces;
 
-    NetDeviceContainer link = csma.Install(NodeContainer(sender.Get(0), switches.Get(0)));
+    NetDeviceContainer link = csma.Install(NodeContainer(sender.Get(0), e1));
     senderInterfaces.Add(link.Get(0));
     e1Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(switches.Get(0), switches.Get(1)));
+    link = csma.Install(NodeContainer(e1, c1));
     e1Interfaces.Add(link.Get(0));
     c1Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(switches.Get(0), switches.Get(2)));
+    link = csma.Install(NodeContainer(e1, c2));
     e1Interfaces.Add(link.Get(0));
     c2Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(switches.Get(1), switches.Get(3)));
+    link = csma.Install(NodeContainer(c1, e2));
     c1Interfaces.Add(link.Get(0));
     e2Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(switches.Get(2), switches.Get(3)));
+    link = csma.Install(NodeContainer(c2, e2));
     c2Interfaces.Add(link.Get(0));
     e2Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(receiver.Get(0), switches.Get(3)));
+    link = csma.Install(NodeContainer(receiver.Get(0), e2));
     receiverInterfaces.Add(link.Get(0));
     e2Interfaces.Add(link.Get(1));
 
@@ -124,27 +124,21 @@ main(int argc, char *argv[]) {
     Ipv6AddressHelper ipv6;
     ipv6.SetBase(Ipv6Address("2001::"), Ipv6Prefix(64));
     Ipv6InterfaceContainer senderIpv6InterfaceContainer = ipv6.Assign(senderInterfaces);
-    senderIpv6InterfaceContainer.SetForwarding(0, true);
-    senderIpv6InterfaceContainer.SetDefaultRouteInAllNodes(0);
 
     ipv6.SetBase(Ipv6Address("2002::"), Ipv6Prefix(64));
     Ipv6InterfaceContainer receiverIpv6InterfaceContainer = ipv6.Assign(receiverInterfaces);
-    receiverIpv6InterfaceContainer.SetForwarding(0, true);
-    receiverIpv6InterfaceContainer.SetDefaultRouteInAllNodes(0);
 
     Ptr<NetDevice> senderDevice = senderInterfaces.Get(0);
     Ptr<Node> node0 = senderDevice->GetNode();
     int32_t ipv6InterfaceIndex0 = node0->GetObject<Ipv6>()->GetInterfaceForDevice(senderDevice);
     Ptr<Ipv6Interface> senderIpv6Interface =
             node0->GetObject<Ipv6L3Protocol>()->GetInterface(ipv6InterfaceIndex0);
-    std::cout << senderIpv6Interface << std::endl;
 
     Ptr<NetDevice> receiverDevice = receiverInterfaces.Get(0);
     Ptr<Node> node1 = receiverDevice->GetNode();
     int32_t ipv6InterfaceIndex1 = node1->GetObject<Ipv6>()->GetInterfaceForDevice(receiverDevice);
     Ptr<Ipv6Interface> receiverIpv6Interface =
             node1->GetObject<Ipv6L3Protocol>()->GetInterface(ipv6InterfaceIndex1);
-    std::cout << receiverIpv6Interface << std::endl;
 
     Ipv6Address senderIpv6Address = senderIpv6Interface->GetAddress(1).GetAddress();
     Mac48Address senderMacAddress = Mac48Address();
@@ -154,11 +148,11 @@ main(int argc, char *argv[]) {
     Mac48Address receiverMacAddress = Mac48Address();
     receiverMacAddress = receiverMacAddress.ConvertFrom(receiverDevice->GetAddress());
 
-    std::cout << "############# Devices Configuration ##############" << std::endl;
-    std::cout << "Sender Mac Address: " << senderMacAddress << std::endl;
-    std::cout << "Sender Ipv6 Address: " << senderIpv6Address << std::endl;
-    std::cout << "Receiver Mac Address: " << receiverMacAddress << std::endl;
-    std::cout << "Receiver Ipv6 Address: " << receiverIpv6Address << std::endl;
+    NS_LOG_INFO("############# Devices Configuration ##############");
+    NS_LOG_INFO("Sender Mac Address: " << senderMacAddress);
+    NS_LOG_INFO("Sender Ipv6 Address: " << senderIpv6Address);
+    NS_LOG_INFO("Receiver Mac Address: " << receiverMacAddress);
+    NS_LOG_INFO("Receiver Ipv6 Address: " << receiverIpv6Address);
 
 
     Ptr<NdiscCache> ndiscCacheSender = senderIpv6Interface->GetNdiscCache();
@@ -220,28 +214,34 @@ main(int argc, char *argv[]) {
 
     NS_LOG_INFO("Create Applications.");
     uint16_t port = 20000;
-    OnOffHelper onoff("ns3::UdpSocketFactory",
+    OnOffHelper onoff("ns3::TcpSocketFactory",
                       Address(Inet6SocketAddress(receiverIpv6Address, port)));
     onoff.SetConstantRate(DataRate("500kb/s"));
 
+    ApplicationContainer senderApp = onoff.Install(sender.Get(0));
+    senderApp.Start(Seconds(1.0));
+    senderApp.Stop(Seconds(10.0));
 
-    ApplicationContainer app = onoff.Install(sender.Get(0));
-    app.Start(Seconds(1.0));
-    app.Stop(Seconds(10.0));
-
-    PacketSinkHelper sink("ns3::UdpSocketFactory",
-                          Address(Inet6SocketAddress(senderIpv6Address, port)));
-    app = sink.Install(receiver.Get(0));
-    app.Start(Seconds(0.0));
+    PacketSinkHelper sink("ns3::TcpSocketFactory",
+                          Address(Inet6SocketAddress(Ipv6Address::GetAny(), port)));
+    ApplicationContainer receiverApp = sink.Install(receiver.Get(0));
+    receiverApp.Start(Seconds(0.0));
+    receiverApp.Stop(Seconds(11.0));
 
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;
     csma.EnableAsciiAll(ascii.CreateFileStream("p4-switch.tr"));
     csma.EnablePcapAll("p4-switch", true);
 
+    FlowMonitorHelper flowHelper;
+    Ptr<FlowMonitor> flowMon = flowHelper.Install(NodeContainer(sender.Get(0), receiver.Get(0)));
+//    flowMon->CheckForLostPackets();
+
     NS_LOG_INFO("Run Simulation.");
     Simulator::Run();
-    Simulator::Stop(Seconds(11));
+    Simulator::Stop(Seconds(12));
+
+    flowMon->SerializeToXmlFile("flow-monitor.xml", true, true);
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
 }

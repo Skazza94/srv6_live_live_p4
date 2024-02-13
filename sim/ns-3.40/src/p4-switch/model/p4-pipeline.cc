@@ -397,11 +397,6 @@ P4Pipeline::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
 
     p->AddHeader(eth);
 
-    std::cout << "###################################" << std::endl;
-    p->Print(std::cout);
-    std::cout << std::endl;
-    std::cout << "###################################" << std::endl;
-
     return p;
 }
 } // namespace ns3

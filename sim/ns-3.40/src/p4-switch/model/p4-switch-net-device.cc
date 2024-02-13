@@ -122,9 +122,6 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
     // Re-append Ethernet header, removed by CsmaNetDevice
     Ptr<Packet> full_packet = packet->Copy();
 
-    full_packet->Print(std::cout);
-    std::cout << std::endl;
-
     EthernetHeader eth_hdr_in;
     Mac48Address mac_src = Mac48Address::ConvertFrom(src);
     Mac48Address mac_dst = Mac48Address::ConvertFrom(dst);

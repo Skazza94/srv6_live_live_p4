@@ -16,4 +16,5 @@ build_lib_example(
     ${libinternet}
     ${libapplications}
     ${libp4-switch}
+    ${libflow-monitor}
 )
