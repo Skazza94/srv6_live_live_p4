@@ -46,6 +46,7 @@ std::string getMacString(uint8_t *mac) {
 int
 main(int argc, char *argv[]) {
     LogComponentEnable("LiveLiveExample", LOG_LEVEL_INFO);
+    LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
 //    LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
 //    LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
 
@@ -235,12 +236,11 @@ main(int argc, char *argv[]) {
 
     FlowMonitorHelper flowHelper;
     Ptr<FlowMonitor> flowMon = flowHelper.Install(NodeContainer(sender.Get(0), receiver.Get(0)));
-//    flowMon->CheckForLostPackets();
 
     NS_LOG_INFO("Run Simulation.");
+    Simulator::Stop(Seconds(20));
     Simulator::Run();
-    Simulator::Stop(Seconds(12));
-
+    flowMon->CheckForLostPackets();
     flowMon->SerializeToXmlFile("flow-monitor.xml", true, true);
     Simulator::Destroy();
     NS_LOG_INFO("Done.");

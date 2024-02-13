@@ -160,6 +160,18 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
             out_pkt->AddByteTag(*tag);
         }
 
+        PacketTagIterator pit = packet->GetPacketTagIterator();
+        while (pit.HasNext()) {
+            PacketTagIterator::Item tag_item = pit.Next();
+            Callback<ObjectBase*> constructor = tag_item.GetTypeId().GetConstructor();
+
+            Tag* tag = dynamic_cast<Tag*>(constructor());
+            NS_ASSERT(tag != nullptr);
+            tag_item.GetTag(*tag);
+
+            out_pkt->AddPacketTag(*tag);
+        }
+
         NS_LOG_DEBUG("Forwarding pkt "
                      << out_pkt << " to port " << item.first << " " << eth_hdr_out.GetDestination()
                      << " " << eth_hdr_out.GetSource() << " " << eth_hdr_out.GetLengthType());
