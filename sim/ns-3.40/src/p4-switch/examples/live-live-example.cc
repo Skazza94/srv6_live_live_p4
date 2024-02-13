@@ -241,7 +241,7 @@ main(int argc, char *argv[]) {
     Simulator::Stop(Seconds(20));
     Simulator::Run();
     flowMon->CheckForLostPackets();
-    flowMon->SerializeToXmlFile("flow-monitor.xml", true, true);
+    flowMon->SerializeToXmlFile("flow_monitor-ll-2-2-1.xml", true, true);
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
 }
