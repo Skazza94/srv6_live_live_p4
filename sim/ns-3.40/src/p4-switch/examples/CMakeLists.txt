@@ -18,3 +18,14 @@ build_lib_example(
     ${libp4-switch}
     ${libflow-monitor}
 )
+
+build_lib_example(
+        NAME live-live-experiment
+        SOURCE_FILES live-live-experiment.cc
+        LIBRARIES_TO_LINK
+        ${libcsma}
+        ${libinternet}
+        ${libapplications}
+        ${libp4-switch}
+        ${libflow-monitor}
+)
