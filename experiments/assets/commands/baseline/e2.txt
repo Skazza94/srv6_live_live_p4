@@ -1,4 +1,0 @@
-table_add check_live_live_enabled ipv6_encap_forward 2002::/64 => e2::2 1
-table_add srv6_forward add_srv6_dest_segment 1 => c1::e1
-table_add srv6_forward add_srv6_dest_segment 2 => c2::e1
-table_add ipv6_forward forward 2002::/64 => 3  0x0000000be200

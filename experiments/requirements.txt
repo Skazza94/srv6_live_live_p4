@@ -1,4 +1,4 @@
-kathara;
-matplotlib;
-coloredlogs;
-numpy;
+kathara
+matplotlib
+coloredlogs
+numpy

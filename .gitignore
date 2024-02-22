@@ -7,3 +7,10 @@ experiments/test_lab*
 experiments/*/shared/test_*.json
 *-lab/shared/test_*.json
 */__pycache__/
+__pycache__
+*.pyc
+lab/shared/*
+.vscode/
+sim/ns-3.40/src/p4-switch/examples/p4src
+sim/ns-3.40/src/p4-switch/examples/forward_build
+sim/ns-3.40/src/p4-switch/examples/livelive_build

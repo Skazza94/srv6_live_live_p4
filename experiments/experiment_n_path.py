@@ -78,8 +78,10 @@ def copy_folder_in_device(device, folder):
 
 
 def build_lab(n_paths, test_type):
-    template_path = os.path.abspath(os.path.join(".", "assets", "n_path"))
-    p4_src_path = os.path.join(template_path, "p4src")
+    curr_path = os.path.dirname(__file__)
+    
+    template_path = os.path.abspath(os.path.join(curr_path, "assets", "n_path"))
+    p4_src_path = os.path.abspath(os.path.join(curr_path, "..", "p4src"))
     with open(os.path.join(template_path, "c_dev_template.startup"), "r") as startup_template:
         c_dev_startup_template = startup_template.read()
     with open(os.path.join(template_path, "e_dev_template.startup"), "r") as startup_template:
@@ -283,7 +285,6 @@ if __name__ == '__main__':
 
             logging.info(f"Running {test_type} experiments...")
             logging.info(f"Building lab with {n_path} paths")
-
             lab = build_lab(n_path, test_type)
 
             for run in range(1, n_runs + 1):
