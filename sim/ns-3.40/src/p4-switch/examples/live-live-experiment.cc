@@ -23,6 +23,7 @@
 #include "ns3/network-module.h"
 #include "ns3/p4-switch-module.h"
 
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -145,33 +146,62 @@ addIpv6Addresses(Ptr<Ipv6Interface> ipv6Interface,
     }
 }
 
+std::string
+get_path(std::string directory, std::string file)
+{
+    std::string path = directory;
+    if (!directory.empty() && file.back() != '/')
+    {
+        path += '/';
+    }
+    path += file;
+    return path;
+}
+
 int
 main(int argc, char* argv[])
 {
     LogComponentEnable("LiveLiveExample", LOG_LEVEL_INFO);
     //    LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
     //    LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
-    LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
+    //    LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
 
     int llFlows = 1;
     int concurrentFlowsActive = 1;
     int concurrentFlowsBackup = 1;
+    std::string results_path = "src/p4-switch/results";
 
     CommandLine cmd;
+    cmd.AddValue("results-path", "The path where to save results", results_path);
+    cmd.AddValue("ll-flows", "The number of concurrent live-live flows to generate", llFlows);
+    cmd.AddValue("active-flows",
+                 "The number of concurrent flows on the active path",
+                 concurrentFlowsActive);
+    cmd.AddValue("backup-flows",
+                 "The number of concurrent flows on the backup path",
+                 concurrentFlowsBackup);
     cmd.Parse(argc, argv);
+
+    NS_LOG_INFO("Results path: " + results_path);
+    NS_LOG_INFO("ll-flows: " + std::to_string(llFlows));
+    NS_LOG_INFO("active-flows: " + std::to_string(concurrentFlowsActive));
+    NS_LOG_INFO("backup-flows: " + std::to_string(concurrentFlowsBackup));
+
+    std::filesystem::remove_all(results_path);
+    std::filesystem::create_directories(results_path);
 
     NS_LOG_INFO("Create nodes.");
     NodeContainer llSenders;
     llSenders.Create(1);
 
     NodeContainer concurrentSenders;
-    concurrentSenders.Create(1);
+    concurrentSenders.Create(2);
 
     NodeContainer llReceivers;
     llReceivers.Create(1);
 
     NodeContainer concurrentReceivers;
-    concurrentReceivers.Create(1);
+    concurrentReceivers.Create(2);
 
     NodeContainer llSwitches;
     llSwitches.Create(2);
@@ -188,17 +218,22 @@ main(int argc, char* argv[])
     Ptr<Node> llReceiver = llReceivers.Get(0);
     Ptr<Node> llSender = llSenders.Get(0);
 
-    Ptr<Node> receiver = concurrentReceivers.Get(0);
-    Ptr<Node> sender = concurrentSenders.Get(0);
+    Ptr<Node> activeReceiver = concurrentReceivers.Get(0);
+    Ptr<Node> backupReceiver = concurrentReceivers.Get(1);
+
+    Ptr<Node> activeSender = concurrentSenders.Get(0);
+    Ptr<Node> backupSender = concurrentSenders.Get(1);
 
     NS_LOG_INFO("Build Topology");
     CsmaHelper csma;
     csma.SetChannelAttribute("DataRate", DataRateValue(5000000));
     csma.SetChannelAttribute("Delay", TimeValue(MilliSeconds(2)));
 
-    NetDeviceContainer senderInterfaces;
+    NetDeviceContainer activeSenderInterfaces;
+    NetDeviceContainer backupSenderInterfaces;
     NetDeviceContainer llSenderInterfaces;
-    NetDeviceContainer receiverInterfaces;
+    NetDeviceContainer activeReceiverInterfaces;
+    NetDeviceContainer backupReceiverInterfaces;
     NetDeviceContainer llReceiverInterfaces;
     NetDeviceContainer e1Interfaces;
     NetDeviceContainer e2Interfaces;
@@ -209,8 +244,12 @@ main(int argc, char* argv[])
     llSenderInterfaces.Add(link.Get(0));
     e1Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(sender, e1));
-    senderInterfaces.Add(link.Get(0));
+    link = csma.Install(NodeContainer(activeSender, e1));
+    activeSenderInterfaces.Add(link.Get(0));
+    e1Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(backupSender, e1));
+    backupSenderInterfaces.Add(link.Get(0));
     e1Interfaces.Add(link.Get(1));
 
     link = csma.Install(NodeContainer(e1, c1));
@@ -233,15 +272,21 @@ main(int argc, char* argv[])
     llReceiverInterfaces.Add(link.Get(0));
     e2Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(receiver, e2));
-    receiverInterfaces.Add(link.Get(0));
+    link = csma.Install(NodeContainer(activeReceiver, e2));
+    activeReceiverInterfaces.Add(link.Get(0));
+    e2Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(backupReceiver, e2));
+    backupReceiverInterfaces.Add(link.Get(0));
     e2Interfaces.Add(link.Get(1));
 
     NS_LOG_INFO("Links Built");
     InternetStackHelper internetV6only;
     internetV6only.SetIpv4StackInstall(false);
-    internetV6only.Install(sender);
-    internetV6only.Install(receiver);
+    internetV6only.Install(activeSender);
+    internetV6only.Install(backupSender);
+    internetV6only.Install(activeReceiver);
+    internetV6only.Install(backupReceiver);
     internetV6only.Install(llSender);
     internetV6only.Install(llReceiver);
 
@@ -257,26 +302,42 @@ main(int argc, char* argv[])
     llReceiverIpv6Helper.Assign(llReceiverInterfaces);
     Ptr<Ipv6Interface> llReceiverIpv6Interface = getIpv6Interface(llReceiverInterfaces.Get(0));
 
-    Ipv6AddressHelper senderIpv6Helper;
-    senderIpv6Helper.SetBase(Ipv6Address("2003::"), Ipv6Prefix(64));
-    senderIpv6Helper.Assign(senderInterfaces);
-    Ptr<Ipv6Interface> senderIpv6Interface = getIpv6Interface(senderInterfaces.Get(0));
+    Ipv6AddressHelper activeSenderIpv6Helper;
+    activeSenderIpv6Helper.SetBase(Ipv6Address("2003::"), Ipv6Prefix(64));
+    activeSenderIpv6Helper.Assign(activeSenderInterfaces);
+    Ptr<Ipv6Interface> activeSenderIpv6Interface = getIpv6Interface(activeSenderInterfaces.Get(0));
 
-    Ipv6AddressHelper receiverIpv6Helper;
-    receiverIpv6Helper.SetBase(Ipv6Address("2004::"), Ipv6Prefix(64));
-    receiverIpv6Helper.Assign(receiverInterfaces);
-    Ptr<Ipv6Interface> receiverIpv6Interface = getIpv6Interface(receiverInterfaces.Get(0));
+    Ipv6AddressHelper backupSenderIpv6Helper;
+    backupSenderIpv6Helper.SetBase(Ipv6Address("2005::"), Ipv6Prefix(64));
+    backupSenderIpv6Helper.Assign(backupSenderInterfaces);
+    Ptr<Ipv6Interface> backupSenderIpv6Interface = getIpv6Interface(backupSenderInterfaces.Get(0));
+
+    Ipv6AddressHelper activeReceiverIpv6Helper;
+    activeReceiverIpv6Helper.SetBase(Ipv6Address("2004::"), Ipv6Prefix(64));
+    activeReceiverIpv6Helper.Assign(activeReceiverInterfaces);
+    Ptr<Ipv6Interface> activeReceiverIpv6Interface =
+        getIpv6Interface(activeReceiverInterfaces.Get(0));
+
+    Ipv6AddressHelper backupReceiverIpv6Helper;
+    backupReceiverIpv6Helper.SetBase(Ipv6Address("2006::"), Ipv6Prefix(64));
+    backupReceiverIpv6Helper.Assign(backupReceiverInterfaces);
+    Ptr<Ipv6Interface> backupReceiverIpv6Interface =
+        getIpv6Interface(backupReceiverInterfaces.Get(0));
 
     NS_LOG_INFO("Configuring llSender address");
     addIpv6Addresses(llSenderIpv6Interface, llFlows, llSenderIpv6Helper);
     addIpv6Addresses(llReceiverIpv6Interface, llFlows, llReceiverIpv6Helper);
-    addIpv6Addresses(senderIpv6Interface, concurrentFlowsActive, senderIpv6Helper);
-    addIpv6Addresses(receiverIpv6Interface, concurrentFlowsActive, receiverIpv6Helper);
+    addIpv6Addresses(activeSenderIpv6Interface, 1, activeSenderIpv6Helper);
+    addIpv6Addresses(backupSenderIpv6Interface, 1, backupSenderIpv6Helper);
+    addIpv6Addresses(activeReceiverIpv6Interface, concurrentFlowsActive, activeReceiverIpv6Helper);
+    addIpv6Addresses(backupReceiverIpv6Interface, concurrentFlowsBackup, backupReceiverIpv6Helper);
 
     addArpEntriesFromInterfaceAddresses(llReceiverIpv6Interface, llSenderIpv6Interface);
     addArpEntriesFromInterfaceAddresses(llSenderIpv6Interface, llReceiverIpv6Interface);
-    addArpEntriesFromInterfaceAddresses(receiverIpv6Interface, senderIpv6Interface);
-    addArpEntriesFromInterfaceAddresses(senderIpv6Interface, receiverIpv6Interface);
+    addArpEntriesFromInterfaceAddresses(activeReceiverIpv6Interface, activeSenderIpv6Interface);
+    addArpEntriesFromInterfaceAddresses(backupReceiverIpv6Interface, backupSenderIpv6Interface);
+    addArpEntriesFromInterfaceAddresses(activeSenderIpv6Interface, activeReceiverIpv6Interface);
+    addArpEntriesFromInterfaceAddresses(backupSenderIpv6Interface, backupReceiverIpv6Interface);
 
     P4SwitchHelper liveliveHelper;
     liveliveHelper.SetDeviceAttribute(
@@ -284,27 +345,35 @@ main(int argc, char* argv[])
         StringValue("/ns3/ns-3.40/src/p4-switch/examples/livelive_build/srv6_livelive.json"));
 
     uint8_t llMac[6];
-    uint8_t mac[6];
+    uint8_t activeMac[6];
+    uint8_t backupMac[6];
     convertToMacAddress(llSenderIpv6Interface->GetDevice()->GetAddress()).CopyTo(llMac);
-    convertToMacAddress(senderIpv6Interface->GetDevice()->GetAddress()).CopyTo(mac);
+    convertToMacAddress(activeSenderIpv6Interface->GetDevice()->GetAddress()).CopyTo(activeMac);
+    convertToMacAddress(backupSenderIpv6Interface->GetDevice()->GetAddress()).CopyTo(backupMac);
     std::string e1Commands =
-        "mc_mgrp_create 1\nmc_node_create 1 3 4\nmc_node_associate 1 0\n"
+        "mc_mgrp_create 1\nmc_node_create 1 4 5\nmc_node_associate 1 0\n"
         "table_add check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2\n"
-        "table_set_default check_live_live_enabled ipv6_encap_forward_port e1::2 3\n"
-        "table_add check_live_live_enabled ipv6_encap_forward_port 2003::/64 => e1::2 3\n"
-        "table_add srv6_forward add_srv6_dest_segment 3 => e2::2\n"
+        "table_set_default check_live_live_enabled ipv6_encap_forward_port e1::2 4\n"
+        "table_add check_live_live_enabled ipv6_encap_forward_port 2003::/64 => e1::2 4\n"
+        "table_add check_live_live_enabled ipv6_encap_forward_port 2005::/64 => e1::2 5\n"
+        "table_add srv6_forward add_srv6_dest_segment 4 => e2::2\n"
+        "table_add srv6_forward add_srv6_dest_segment 5 => e2::2\n"
         "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55\n"
         "table_add srv6_function srv6_ll_deduplicate 85 => \n"
         "table_add ipv6_forward forward 2001::/64 => 1 " +
         getMacString(llMac) +
         "\n"
         "table_add ipv6_forward forward 2003::/64 => 2 " +
-        getMacString(mac);
+        getMacString(activeMac) +
+        "\n"
+        "table_add ipv6_forward forward 2005::/64 => 3 " +
+        getMacString(backupMac);
     liveliveHelper.SetDeviceAttribute("PipelineCommands", StringValue(e1Commands));
     liveliveHelper.Install(e1, e1Interfaces);
 
     convertToMacAddress(llReceiverIpv6Interface->GetDevice()->GetAddress()).CopyTo(llMac);
-    convertToMacAddress(receiverIpv6Interface->GetDevice()->GetAddress()).CopyTo(mac);
+    convertToMacAddress(activeReceiverIpv6Interface->GetDevice()->GetAddress()).CopyTo(activeMac);
+    convertToMacAddress(backupReceiverIpv6Interface->GetDevice()->GetAddress()).CopyTo(backupMac);
     std::string e2Commands =
         "mc_mgrp_create 1\nmc_node_create 1 1 2\nmc_node_associate 1 0\n"
         "table_add srv6_function srv6_ll_deduplicate 85 => \n"
@@ -312,11 +381,16 @@ main(int argc, char* argv[])
         getMacString(llMac) +
         "\n"
         "table_add ipv6_forward forward 2004::/64 => 4 " +
-        getMacString(mac) +
+        getMacString(activeMac) +
+        "\n"
+        "table_add ipv6_forward forward 2006::/64 => 5 " +
+        getMacString(backupMac) +
         "\n"
         "table_add check_live_live_enabled live_live_mcast 2002::/64 => 1 e2::2\n"
         "table_add check_live_live_enabled ipv6_encap_forward_port 2004::/64 => e2::2 1\n"
+        "table_add check_live_live_enabled ipv6_encap_forward_port 2006::/64 => e2::2 2\n"
         "table_add srv6_forward add_srv6_dest_segment 1 => e1::2\n"
+        "table_add srv6_forward add_srv6_dest_segment 2 => e1::2\n"
         "table_set_default check_live_live_enabled ipv6_encap_forward e2::2 1\n"
         "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55";
     liveliveHelper.SetDeviceAttribute("PipelineCommands", StringValue(e2Commands));
@@ -337,40 +411,67 @@ main(int argc, char* argv[])
 
     NS_LOG_INFO("Create Applications.");
     uint16_t port = 20000;
-    ApplicationContainer senderApp =
-        createOnOffTcpApplication(receiverIpv6Interface->GetAddress(2).GetAddress(), port, sender);
-    senderApp.Start(Seconds(1.0));
-    senderApp.Stop(Seconds(10.0));
 
-    ApplicationContainer receiverApp = createSinkTcpApplication(port, receiver);
-    receiverApp.Start(Seconds(0.0));
-    receiverApp.Stop(Seconds(11.0));
+    NS_LOG_INFO("Create Active Flow Applications.");
+    for (int i = 0; i < concurrentFlowsActive; i++)
+    {
+        ApplicationContainer activeSenderApp =
+            createOnOffTcpApplication(activeReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
+                                      port,
+                                      activeSender);
+        activeSenderApp.Start(Seconds(1.0));
+        activeSenderApp.Stop(Seconds(10.0));
+
+        ApplicationContainer activeReceiverApp = createSinkTcpApplication(port + i, activeReceiver);
+        activeReceiverApp.Start(Seconds(0.0));
+        activeReceiverApp.Stop(Seconds(11.0));
+    }
+
+    NS_LOG_INFO("Create Backup Flow Applications.");
+    for (int i = 0; i < concurrentFlowsActive; i++)
+    {
+        ApplicationContainer backupSenderApp =
+            createOnOffTcpApplication(backupReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
+                                      port,
+                                      backupSender);
+        backupSenderApp.Start(Seconds(1.0));
+        backupSenderApp.Stop(Seconds(10.0));
+
+        ApplicationContainer backupReceiverApp = createSinkTcpApplication(port + i, backupReceiver);
+        backupReceiverApp.Start(Seconds(0.0));
+        backupReceiverApp.Stop(Seconds(11.0));
+    }
 
     ApplicationContainer llSenderApp =
-        createOnOffTcpApplication(llReceiverIpv6Interface->GetAddress(1).GetAddress(),
+        createOnOffTcpApplication(llReceiverIpv6Interface->GetAddress(2).GetAddress(),
                                   port,
                                   llSender);
-    senderApp.Start(Seconds(1.0));
-    senderApp.Stop(Seconds(10.0));
+    llSenderApp.Start(Seconds(1.0));
+    llSenderApp.Stop(Seconds(10.0));
 
     ApplicationContainer llReceiverApp = createSinkTcpApplication(port, llReceiver);
-    receiverApp.Start(Seconds(0.0));
-    receiverApp.Stop(Seconds(11.0));
+    llReceiverApp.Start(Seconds(0.0));
+    llReceiverApp.Stop(Seconds(11.0));
 
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;
-    csma.EnableAsciiAll(ascii.CreateFileStream("p4-switch.tr"));
-    csma.EnablePcapAll("p4-switch", true);
+
+    csma.EnableAsciiAll(ascii.CreateFileStream(get_path(results_path, "p4-switch.tr")));
+    csma.EnablePcapAll(get_path(results_path, "p4-switch"), true);
 
     FlowMonitorHelper flowHelper;
-    Ptr<FlowMonitor> flowMon =
-        flowHelper.Install(NodeContainer(sender, receiver, llSender, llReceiver));
+    Ptr<FlowMonitor> flowMon = flowHelper.Install(NodeContainer(activeSender,
+                                                                activeReceiver,
+                                                                backupSender,
+                                                                backupReceiver,
+                                                                llSender,
+                                                                llReceiver));
 
     NS_LOG_INFO("Run Simulation.");
     Simulator::Stop(Seconds(20));
     Simulator::Run();
     flowMon->CheckForLostPackets();
-    flowMon->SerializeToXmlFile("flow_monitor-ll-2-2-1.xml", true, true);
+    flowMon->SerializeToXmlFile(get_path(results_path, "flow_monitor-ll-2-2-1.xml"), true, true);
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
 }
