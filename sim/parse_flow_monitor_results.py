@@ -255,21 +255,11 @@ def main(argv):
                     for run in runs:
                         total_fct = 0
                         flow_count = 0
-                        large_flow_total_fct = 0
-                        large_flow_count = 0
-                        large_flow_total_rx_bytes = 0
-                        small_flow_total_fct = 0
-                        small_flow_count = 0
-
                         total_lost_packets = 0
                         total_tx_packets = 0
                         total_rx_packets = 0
                         total_rx_bytes = 0
                         fcts = []
-                        small_fcts = []
-                        large_fcts = []
-                        max_small_flow_id = 0
-                        max_small_flow_fct = 0
 
                         reversed_tuples = {}
 
@@ -289,8 +279,8 @@ def main(argv):
                                 continue
 
                             if flow.tx_bytes > 0:
-                                to_continue = True
                                 if reversed_tuple in reversed_tuples:
+                                    to_continue = True
                                     original_flow = reversed_tuples[reversed_tuple]
                                     total_fct += original_flow.fct
                                     fcts.append(original_flow.fct)
@@ -299,18 +289,6 @@ def main(argv):
                                     total_rx_packets += original_flow.rx_packets
                                     total_rx_bytes += original_flow.rx_bytes
                                     total_lost_packets += original_flow.lost_packets
-                                    if original_flow.tx_bytes > 10000000:
-                                        large_flow_count += 1
-                                        large_flow_total_fct += original_flow.fct
-                                        large_flow_total_rx_bytes += original_flow.rx_bytes
-                                        large_fcts.append(original_flow.fct)
-                                    if original_flow.tx_bytes < 100000:
-                                        small_flow_count += 1
-                                        small_flow_total_fct += original_flow.fct
-                                        small_fcts.append(original_flow.fct)
-                                        if original_flow.fct > max_small_flow_fct:
-                                            max_small_flow_id = original_flow.flow_id
-                                            max_small_flow_fct = original_flow.fct
 
                                     t = original_flow.flow_tuple
                                     proto = {6: 'TCP', 17: 'UDP'}[t.protocol]
@@ -338,49 +316,35 @@ def main(argv):
                             flow_count += 1
 
                         fcts = sorted(fcts)
-                        large_fcts = sorted(large_fcts)
-                        small_fcts = sorted(small_fcts)
 
                         print("Number of flows: %d" % flow_count)
-                        print("Number of large flows: %d" % large_flow_count)
-                        print("Number of small flows: %d" % small_flow_count)
+                        result = {'flow_count': 0}
                         if flow_count == 0:
                             print("No flows")
                         else:
-                            results[sim_mode][sim_n_paths][sim_n_primary][sim_n_backup].append({
-                                'fct_50': (total_fct / flow_count), 
-                                'fct_99': (fcts[int((len(fcts) * 99) / 100)]), 
-                                'fct_999': (fcts[int((len(fcts) * 999) / 1000)])
-                            })
+                            result['fct_50'] = (total_fct / flow_count)
+                            result['fct_99'] = (fcts[int((len(fcts) * 99) / 100)])
+                            result['fct_999'] = (fcts[int((len(fcts) * 999) / 1000)])
 
-                            print("Avg FCT: %.4f" % (total_fct / flow_count))
-                            print("Flow 99-ile FCT: %.4f" % (fcts[int((len(fcts) * 99) / 100)]))
-                            print("Flow 99.9-ile FCT: %.4f" % (fcts[int((len(fcts) * 999) / 1000)]))
-
-                        if large_flow_count == 0:
-                            print("No large flows")
-                        else:
-                            print("Large Flow Avg FCT: %.4f" % (large_flow_total_fct / large_flow_count))
-                            print("Large Flow 99-ile FCT: %.4f" % (large_fcts[int((len(large_fcts) * 99) / 100)]))
-                            print("Large Flow 99.9-ile FCT: %.4f" % (large_fcts[int((len(large_fcts) * 999) / 1000)]))
-                            print("Total Large RX Bytes: %.4f" % large_flow_total_rx_bytes)
-
-                        if small_flow_count == 0:
-                            print("No small flows")
-                        else:
-                            print("Small Flow Avg FCT: %.4f" % (small_flow_total_fct / small_flow_count))
-                            print("Small Flow 99-ile FCT: %.4f" % (small_fcts[int((len(small_fcts) * 99) / 100)]))
-                            print("Small Flow 99.9-ile FCT: %.4f" % (small_fcts[int((len(small_fcts) * 999) / 1000)]))
+                            print("Avg FCT: %.4f s" % (total_fct / flow_count))
+                            print("Flow 99-ile FCT: %.4f s" % (fcts[int((len(fcts) * 99) / 100)]))
+                            print("Flow 99.9-ile FCT: %.4f s" % (fcts[int((len(fcts) * 999) / 1000)]))
 
                         print("Total TX Packets: %i" % total_tx_packets)
                         print("Total RX Packets: %i" % total_rx_packets)
                         print("Total RX Bytes: %i" % total_rx_bytes)
                         print("Total Lost Packets: %i" % total_lost_packets)
-                        print("Max Small flow Id: %i" % max_small_flow_id)
+
+                        result['tx_pkts_total'] = total_tx_packets
+                        result['rx_pkts_total'] = total_rx_packets
+                        result['rx_bytes_total'] = total_rx_bytes
+                        result['total_lost'] = total_lost_packets
+
+                        results[sim_mode][sim_n_paths][sim_n_primary][sim_n_backup].append(result)
 
     results_file = 'results-%d.json' % time.time()
-    with open(results_file, 'w') as results_file:
-        results_file.write(json.dumps(results))
+    with open(results_file, 'w') as res_file:
+        res_file.write(json.dumps(results))
 
     print("Results saved in file: %s" % results_file)
 
