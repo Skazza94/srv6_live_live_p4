@@ -417,7 +417,7 @@ main(int argc, char* argv[])
     {
         ApplicationContainer activeSenderApp =
             createOnOffTcpApplication(activeReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
-                                      port,
+                                      port + i,
                                       activeSender);
         activeSenderApp.Start(Seconds(1.0));
         activeSenderApp.Stop(Seconds(10.0));
@@ -432,7 +432,7 @@ main(int argc, char* argv[])
     {
         ApplicationContainer backupSenderApp =
             createOnOffTcpApplication(backupReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
-                                      port,
+                                      port + i,
                                       backupSender);
         backupSenderApp.Start(Seconds(1.0));
         backupSenderApp.Stop(Seconds(10.0));
