@@ -169,7 +169,8 @@ main(int argc, char* argv[])
     uint32_t llFlows = 1;
     uint32_t concurrentFlowsActive = 1;
     uint32_t concurrentFlowsBackup = 1;
-    std::string results_path = "src/p4-switch/results";
+    std::string results_path = "examples/srv6-live-live/results/flow-monitor";
+    uint32_t dumpTraffic = 0;
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", results_path);
@@ -180,6 +181,9 @@ main(int argc, char* argv[])
     cmd.AddValue("backup-flows",
                  "The number of concurrent flows on the backup path",
                  concurrentFlowsBackup);
+    cmd.AddValue("dump",
+                 "Dump traffic during the simulation",
+                 dumpTraffic);
     cmd.Parse(argc, argv);
 
     NS_LOG_INFO("Results path: " + results_path);
@@ -187,7 +191,7 @@ main(int argc, char* argv[])
     NS_LOG_INFO("active-flows: " + std::to_string(concurrentFlowsActive));
     NS_LOG_INFO("backup-flows: " + std::to_string(concurrentFlowsBackup));
 
-    std::filesystem::remove_all(results_path);
+//    std::filesystem::remove_all(results_path);
     std::filesystem::create_directories(results_path);
 
     NS_LOG_INFO("Create nodes.");
@@ -462,8 +466,10 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;
 
-    csma.EnableAsciiAll(ascii.CreateFileStream(get_path(results_path, "p4-switch.tr")));
-    csma.EnablePcapAll(get_path(results_path, "p4-switch"), true);
+    if (dumpTraffic == 1) {
+        csma.EnableAsciiAll(ascii.CreateFileStream(get_path(results_path, "p4-switch.tr")));
+        csma.EnablePcapAll(get_path(results_path, "p4-switch"), true);
+    }
 
     FlowMonitorHelper flowHelper;
     Ptr<FlowMonitor> flowMon = flowHelper.Install(NodeContainer(activeSender,
