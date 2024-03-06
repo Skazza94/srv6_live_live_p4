@@ -88,7 +88,7 @@ int P4Pipeline::thrift_port = 9090;
 bm::packet_id_t P4Pipeline::packet_id = 0;
 uint8_t P4Pipeline::ns2bm_buf[MAX_PKT_SIZE] = {};
 
-P4Pipeline::P4Pipeline(std::string jsonFile)
+P4Pipeline::P4Pipeline(std::string jsonFile, std::string name)
     : pre(new bm::McSimplePreLAG())
 {
     add_component<bm::McSimplePreLAG>(pre);
@@ -106,16 +106,18 @@ P4Pipeline::P4Pipeline(std::string jsonFile)
 
     import_primitives();
 
+    std::string node_id = (name.empty()) ? std::to_string(thrift_port) : name;
+
     // Initialize the switch
     bm::OptionsParser opt_parser;
     opt_parser.config_file_path = jsonFile;
     opt_parser.debugger_addr =
-        std::string("ipc:///tmp/bmv2-") + std::to_string(thrift_port) + std::string("-debug.ipc");
-    opt_parser.notifications_addr = std::string("ipc:///tmp/bmv2-") + std::to_string(thrift_port) +
-                                    std::string("-notifications.ipc");
-    opt_parser.file_logger =
-        std::string("/tmp/bmv2-") + std::to_string(thrift_port) + std::string("-pipeline.log");
+        std::string("ipc:///tmp/bmv2-") + node_id + std::string("-debug.ipc");
+    opt_parser.notifications_addr =
+        std::string("ipc:///tmp/bmv2-") + node_id + std::string("-notifications.ipc");
     opt_parser.thrift_port = thrift_port++;
+    opt_parser.console_logging = true;
+    opt_parser.log_level = bm::Logger::LogLevel::INFO;
 
     int status = init_from_options_parser(opt_parser);
     if (status != 0)
@@ -123,18 +125,19 @@ P4Pipeline::P4Pipeline(std::string jsonFile)
         BMLOG_DEBUG("Failed to initialize the P4 pipeline");
         std::exit(status);
     }
+
+    int port = get_runtime_port();
+    bm_runtime::start_server(this, port);
+    start_and_return();
 }
 
 void
 P4Pipeline::run_cli(std::string commands)
 {
-    int port = get_runtime_port();
-    bm_runtime::start_server(this, port);
-    start_and_return();
-
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
     // Run the CLI commands to populate table entries
+    int port = get_runtime_port();
     std::string cmd =
         "run_bmv2_CLI --thrift_port " + std::to_string(port) + " \"" + commands + "\"";
     std::system(cmd.c_str());
