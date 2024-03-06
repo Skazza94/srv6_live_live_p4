@@ -2,7 +2,7 @@
 
 for ll in 1
 do
-  for backup in 10 20 50 100
+  for backup in 2 5 10 20 50 100
   do
     for active in 10
     do

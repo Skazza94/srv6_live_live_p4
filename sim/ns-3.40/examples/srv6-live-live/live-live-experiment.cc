@@ -181,9 +181,7 @@ main(int argc, char* argv[])
     cmd.AddValue("backup-flows",
                  "The number of concurrent flows on the backup path",
                  concurrentFlowsBackup);
-    cmd.AddValue("dump",
-                 "Dump traffic during the simulation",
-                 dumpTraffic);
+    cmd.AddValue("dump", "Dump traffic during the simulation", dumpTraffic);
     cmd.Parse(argc, argv);
 
     NS_LOG_INFO("Results path: " + results_path);
@@ -191,7 +189,7 @@ main(int argc, char* argv[])
     NS_LOG_INFO("active-flows: " + std::to_string(concurrentFlowsActive));
     NS_LOG_INFO("backup-flows: " + std::to_string(concurrentFlowsBackup));
 
-//    std::filesystem::remove_all(results_path);
+    //    std::filesystem::remove_all(results_path);
     std::filesystem::create_directories(results_path);
 
     NS_LOG_INFO("Create nodes.");
@@ -466,7 +464,8 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;
 
-    if (dumpTraffic == 1) {
+    if (dumpTraffic == 1)
+    {
         csma.EnableAsciiAll(ascii.CreateFileStream(get_path(results_path, "p4-switch.tr")));
         csma.EnablePcapAll(get_path(results_path, "p4-switch"), true);
     }
@@ -483,7 +482,12 @@ main(int argc, char* argv[])
     Simulator::Stop(Seconds(20));
     Simulator::Run();
     flowMon->CheckForLostPackets();
-    flowMon->SerializeToXmlFile(get_path(results_path, "flow_monitor-ll-2-2-1.xml"), true, true);
+    flowMon->SerializeToXmlFile(get_path(results_path,
+                                         "flow_monitor-ll-" + std::to_string(llFlows) + "-" +
+                                             std::to_string(concurrentFlowsActive) + "-" +
+                                             std::to_string(concurrentFlowsBackup) + ".xml"),
+                                true,
+                                true);
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
 }
