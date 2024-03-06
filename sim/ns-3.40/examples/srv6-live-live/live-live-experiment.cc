@@ -436,7 +436,7 @@ main(int argc, char* argv[])
     }
 
     NS_LOG_INFO("Create Backup Flow Applications.");
-    for (uint32_t i = 0; i < concurrentFlowsActive; i++)
+    for (uint32_t i = 0; i < concurrentFlowsBackup; i++)
     {
         ApplicationContainer backupSenderApp =
             createOnOffTcpApplication(backupReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
