@@ -101,7 +101,7 @@ getIpv6Interface(Ptr<NetDevice> netDevice)
 void
 printRoutes(Ptr<Ipv6StaticRouting> routing)
 {
-    for (int i = 0; i < routing->GetNRoutes(); i++)
+    for (uint32_t i = 0; i < routing->GetNRoutes(); i++)
     {
         std::ostringstream oss;
         oss << routing->GetRoute(i);
@@ -116,7 +116,7 @@ addArpEntriesFromInterfaceAddresses(Ptr<Ipv6Interface> nodeInterface,
     Ipv6StaticRoutingHelper ipv6StaticRouting;
     Ptr<Ipv6StaticRouting> routing = ipv6StaticRouting.GetStaticRouting(
         nodeInterface->GetDevice()->GetNode()->GetObject<Ipv6>());
-    for (int i = 1; i < ipv6Interface->GetNAddresses(); i++)
+    for (uint32_t i = 1; i < ipv6Interface->GetNAddresses(); i++)
     {
         Ipv6Address address = ipv6Interface->GetAddress(i).GetAddress();
         addIpv6ArpEntry(nodeInterface,
@@ -210,10 +210,16 @@ main(int argc, char* argv[])
     forwardSwitches.Create(2);
 
     Ptr<Node> e1 = llSwitches.Get(0);
+    Names::Add("e1", e1);
+
     Ptr<Node> e2 = llSwitches.Get(1);
+    Names::Add("e2", e2);
 
     Ptr<Node> c1 = forwardSwitches.Get(0);
+    Names::Add("c1", c1);
+
     Ptr<Node> c2 = forwardSwitches.Get(1);
+    Names::Add("c2", c2);
 
     Ptr<Node> llReceiver = llReceivers.Get(0);
     Ptr<Node> llSender = llSenders.Get(0);
@@ -342,7 +348,7 @@ main(int argc, char* argv[])
     P4SwitchHelper liveliveHelper;
     liveliveHelper.SetDeviceAttribute(
         "PipelineJson",
-        StringValue("/ns3/ns-3.40/src/p4-switch/examples/livelive_build/srv6_livelive.json"));
+        StringValue("/ns3/ns-3.40/examples/srv6-live-live/livelive_build/srv6_livelive.json"));
 
     uint8_t llMac[6];
     uint8_t activeMac[6];
@@ -399,7 +405,7 @@ main(int argc, char* argv[])
     P4SwitchHelper forwardHelper;
     forwardHelper.SetDeviceAttribute(
         "PipelineJson",
-        StringValue("/ns3/ns-3.40/src/p4-switch/examples/forward_build/srv6_forward.json"));
+        StringValue("/ns3/ns-3.40/examples/srv6-live-live/forward_build/srv6_forward.json"));
     forwardHelper.SetDeviceAttribute(
         "PipelineCommands",
         StringValue("table_add srv6_table srv6_noop 2002::/64 => 2\n"

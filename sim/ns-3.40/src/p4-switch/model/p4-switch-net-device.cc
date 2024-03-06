@@ -27,6 +27,7 @@
 #include "ns3/simulator.h"
 #include "ns3/string.h"
 #include "ns3/uinteger.h"
+#include "ns3/names.h"
 
 /**
  * \file
@@ -109,15 +110,16 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
                                      PacketType packetType)
 {
     NS_LOG_FUNCTION_NOARGS();
-    NS_LOG_DEBUG("UID is " << packet->GetUid());
-
+    
     if (m_p4_pipeline == nullptr)
     {
         InitPipeline();
     }
 
-    NS_LOG_LOGIC("ReceiveFromDevice sending through P4 pipeline");
+    std::string node_name = Names::FindName(m_node);
+
     uint32_t port_n = GetPortN(incomingPort);
+    NS_LOG_LOGIC(node_name << " ReceiveFromDevice port " << port_n << " sending through P4 pipeline");
 
     // Re-append Ethernet header, removed by CsmaNetDevice
     Ptr<Packet> full_packet = packet->Copy();
@@ -136,7 +138,7 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
         Ptr<NetDevice> port = GetPort(item.first);
         if (!port)
         {
-            NS_LOG_DEBUG("Port " << item.first << " not found, dropping packet");
+            NS_LOG_DEBUG(node_name << " Port " << item.first << " not found, dropping packet");
             continue;
         }
 
@@ -172,7 +174,7 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
             out_pkt->AddPacketTag(*tag);
         }
 
-        NS_LOG_DEBUG("Forwarding pkt "
+        NS_LOG_DEBUG(node_name << " Forwarding pkt "
                      << out_pkt << " to port " << item.first << " " << eth_hdr_out.GetDestination()
                      << " " << eth_hdr_out.GetSource() << " " << eth_hdr_out.GetLengthType());
 
@@ -190,15 +192,17 @@ P4SwitchNetDevice::InitPipeline()
 {
     NS_LOG_FUNCTION_NOARGS();
 
-    if (m_pipeline_json != "" && !m_pipeline_commands.empty())
+    std::string node_name = Names::FindName(m_node);
+    if (m_pipeline_json != "")
     {
-        NS_LOG_DEBUG("Initializing up P4 pipeline...");
-        m_p4_pipeline = new P4Pipeline(m_pipeline_json);
-        m_p4_pipeline->run_cli(m_pipeline_commands);
+        NS_LOG_DEBUG(node_name << " Initializing up P4 pipeline...");
+        m_p4_pipeline = new P4Pipeline(m_pipeline_json, node_name);
+        if (!m_pipeline_commands.empty())
+            m_p4_pipeline->run_cli(m_pipeline_commands);
     }
     else
     {
-        NS_LOG_ERROR("Cannot initialize P4 pipeline, abort!");
+        NS_LOG_ERROR(node_name << " Cannot initialize P4 pipeline, abort!");
         std::exit(1);
     }
 }

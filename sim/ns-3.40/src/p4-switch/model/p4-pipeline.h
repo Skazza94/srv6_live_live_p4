@@ -52,7 +52,7 @@ namespace ns3
       /**
        * \brief P4Pipeline constructor
        */
-      P4Pipeline(std::string jsonFile);
+      P4Pipeline(std::string jsonFile, std::string name);
 
       /**
        * \brief Run the provided CLI commands to populate table entries
