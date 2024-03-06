@@ -166,9 +166,9 @@ main(int argc, char* argv[])
     //    LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
     //    LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
 
-    int llFlows = 1;
-    int concurrentFlowsActive = 1;
-    int concurrentFlowsBackup = 1;
+    uint32_t llFlows = 1;
+    uint32_t concurrentFlowsActive = 1;
+    uint32_t concurrentFlowsBackup = 1;
     std::string results_path = "src/p4-switch/results";
 
     CommandLine cmd;
@@ -419,7 +419,7 @@ main(int argc, char* argv[])
     uint16_t port = 20000;
 
     NS_LOG_INFO("Create Active Flow Applications.");
-    for (int i = 0; i < concurrentFlowsActive; i++)
+    for (uint32_t i = 0; i < concurrentFlowsActive; i++)
     {
         ApplicationContainer activeSenderApp =
             createOnOffTcpApplication(activeReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
@@ -434,7 +434,7 @@ main(int argc, char* argv[])
     }
 
     NS_LOG_INFO("Create Backup Flow Applications.");
-    for (int i = 0; i < concurrentFlowsActive; i++)
+    for (uint32_t i = 0; i < concurrentFlowsActive; i++)
     {
         ApplicationContainer backupSenderApp =
             createOnOffTcpApplication(backupReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
