@@ -138,7 +138,7 @@ control IngressPipe(inout headers hdr,
                     bit<WINDOW_SIZE> curr_bitmap;
                     flow_to_bitmap.read(curr_bitmap, hdr.srv6_ll_tlv.flow_id);
 
-                    log_msg("ll-pkt-seqno: {} - ll-port: {}", {hdr.srv6_ll_tlv.seq_n, standard_metadata.ingress_port});
+                    log_msg("ll-ts: {} - ll-pkt-seqno: {} - ll-port: {}", {standard_metadata.ingress_global_timestamp, hdr.srv6_ll_tlv.seq_n, standard_metadata.ingress_port});
                     bit<1> to_drop = 0;
                     if (hdr.srv6_ll_tlv.seq_n > start_value + (WINDOW_SIZE - 1)) {
                         bit<8> shift_idx = (bit<8>) (hdr.srv6_ll_tlv.seq_n - (WINDOW_SIZE - 1) - start_value);

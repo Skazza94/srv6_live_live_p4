@@ -72,10 +72,17 @@ addIpv6ArpEntry(Ptr<Ipv6Interface> interface, Ipv6Address ipv6Address, Mac48Addr
 }
 
 ApplicationContainer
-createOnOffTcpApplication(Ipv6Address addressToReach, uint16_t port, Ptr<Node> node)
+createOnOffTcpApplication(Ipv6Address addressToReach, uint16_t port, Ptr<Node> node, std::string data_rate,
+                          uint32_t max_bytes)
 {
     OnOffHelper onoff("ns3::TcpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
-    onoff.SetConstantRate(DataRate("500kb/s"));
+//
+//    onoff.SetConstantRate(DataRate(data_rate));
+//
+    onoff.SetAttribute("DataRate", StringValue(data_rate));
+    onoff.SetAttribute("MaxBytes", UintegerValue(max_bytes));
+    onoff.SetAttribute("PacketSize", UintegerValue(1000));
+//    onoff.SetAttribute("Remote", AddressValue(addressToReach));
 
     ApplicationContainer senderApp = onoff.Install(node);
     return senderApp;
@@ -171,6 +178,9 @@ main(int argc, char* argv[])
     uint32_t concurrentFlowsBackup = 1;
     std::string results_path = "examples/srv6-live-live/results/flow-monitor";
     uint32_t dumpTraffic = 0;
+    uint32_t  activeDelay = 0;
+    uint32_t  backupDelay = 0;
+    std::string congestionControl = "ns3::TcpLinuxReno";
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", results_path);
@@ -181,6 +191,15 @@ main(int argc, char* argv[])
     cmd.AddValue("backup-flows",
                  "The number of concurrent flows on the backup path",
                  concurrentFlowsBackup);
+    cmd.AddValue("active-delay",
+                 "The delay to set on the active path",
+                 activeDelay);
+    cmd.AddValue("backup-delay",
+                 "The delay to set on the backup path",
+                 backupDelay);
+    cmd.AddValue("congestion-control",
+                 "The congestion control to use",
+                 congestionControl);
     cmd.AddValue("dump", "Dump traffic during the simulation", dumpTraffic);
     cmd.Parse(argc, argv);
 
@@ -188,6 +207,9 @@ main(int argc, char* argv[])
     NS_LOG_INFO("ll-flows: " + std::to_string(llFlows));
     NS_LOG_INFO("active-flows: " + std::to_string(concurrentFlowsActive));
     NS_LOG_INFO("backup-flows: " + std::to_string(concurrentFlowsBackup));
+    NS_LOG_INFO("active-delay: " + std::to_string(activeDelay));
+    NS_LOG_INFO("backup-delay: " + std::to_string(backupDelay));
+    NS_LOG_INFO("congestion-control: " + congestionControl);
 
     //    std::filesystem::remove_all(results_path);
     std::filesystem::create_directories(results_path);
@@ -234,8 +256,15 @@ main(int argc, char* argv[])
 
     NS_LOG_INFO("Build Topology");
     CsmaHelper csma;
-    csma.SetChannelAttribute("DataRate", DataRateValue(5000000));
-    csma.SetChannelAttribute("Delay", TimeValue(MilliSeconds(2)));
+    csma.SetChannelAttribute("DataRate", StringValue("10Gbps"));
+
+    CsmaHelper csma_active;
+    csma_active.SetChannelAttribute("DataRate", StringValue("10Gbps"));
+    csma_active.SetChannelAttribute("Delay", TimeValue(MilliSeconds(activeDelay)));
+
+    CsmaHelper csma_backup;
+    csma_backup.SetChannelAttribute("DataRate", StringValue("10Gbps"));
+    csma_backup.SetChannelAttribute("Delay", TimeValue(MilliSeconds(backupDelay)));
 
     NetDeviceContainer activeSenderInterfaces;
     NetDeviceContainer backupSenderInterfaces;
@@ -260,11 +289,11 @@ main(int argc, char* argv[])
     backupSenderInterfaces.Add(link.Get(0));
     e1Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(e1, c1));
+    link = csma_active.Install(NodeContainer(e1, c1));
     e1Interfaces.Add(link.Get(0));
     c1Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(e1, c2));
+    link = csma_backup.Install(NodeContainer(e1, c2));
     e1Interfaces.Add(link.Get(0));
     c2Interfaces.Add(link.Get(1));
 
@@ -417,49 +446,58 @@ main(int argc, char* argv[])
     forwardHelper.Install(c1, c1Interfaces);
     forwardHelper.Install(c2, c2Interfaces);
 
+    NS_LOG_INFO("Configuring Congestion Control.");
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue(congestionControl));
+
     NS_LOG_INFO("Create Applications.");
     uint16_t port = 20000;
 
     NS_LOG_INFO("Create Active Flow Applications.");
     for (uint32_t i = 0; i < concurrentFlowsActive; i++)
     {
-        ApplicationContainer activeSenderApp =
-            createOnOffTcpApplication(activeReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
-                                      port + i,
-                                      activeSender);
-        activeSenderApp.Start(Seconds(1.0));
-        activeSenderApp.Stop(Seconds(10.0));
-
         ApplicationContainer activeReceiverApp = createSinkTcpApplication(port + i, activeReceiver);
         activeReceiverApp.Start(Seconds(0.0));
         activeReceiverApp.Stop(Seconds(11.0));
+
+        ApplicationContainer activeSenderApp =
+            createOnOffTcpApplication(activeReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
+                                      port + i,
+                                      activeSender,
+                                      "1Gbps",
+                                      0);
+        activeSenderApp.Start(Seconds(1.0));
+        activeSenderApp.Stop(Seconds(10.0));
     }
 
     NS_LOG_INFO("Create Backup Flow Applications.");
     for (uint32_t i = 0; i < concurrentFlowsBackup; i++)
     {
-        ApplicationContainer backupSenderApp =
-            createOnOffTcpApplication(backupReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
-                                      port + i,
-                                      backupSender);
-        backupSenderApp.Start(Seconds(1.0));
-        backupSenderApp.Stop(Seconds(10.0));
-
         ApplicationContainer backupReceiverApp = createSinkTcpApplication(port + i, backupReceiver);
         backupReceiverApp.Start(Seconds(0.0));
         backupReceiverApp.Stop(Seconds(11.0));
-    }
 
-    ApplicationContainer llSenderApp =
-        createOnOffTcpApplication(llReceiverIpv6Interface->GetAddress(2).GetAddress(),
-                                  port,
-                                  llSender);
-    llSenderApp.Start(Seconds(1.0));
-    llSenderApp.Stop(Seconds(10.0));
+        ApplicationContainer backupSenderApp =
+            createOnOffTcpApplication(backupReceiverIpv6Interface->GetAddress(2 + i).GetAddress(),
+                                      port + i,
+                                      backupSender,
+                                      "1Gbps",
+                                      0);
+        backupSenderApp.Start(Seconds(1.0));
+        backupSenderApp.Stop(Seconds(10.0));
+    }
 
     ApplicationContainer llReceiverApp = createSinkTcpApplication(port, llReceiver);
     llReceiverApp.Start(Seconds(0.0));
     llReceiverApp.Stop(Seconds(11.0));
+
+    ApplicationContainer llSenderApp =
+        createOnOffTcpApplication(llReceiverIpv6Interface->GetAddress(2).GetAddress(),
+                                  port,
+                                  llSender,
+                                  "1Gbps",
+                                  0);
+    llSenderApp.Start(Seconds(1.0));
+    llSenderApp.Stop(Seconds(10.0));
 
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;
