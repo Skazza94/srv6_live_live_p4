@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 figures_path = "figures"
 
 
-def plot_seqn_figure(results):
+def plot_seqn_figure(results, experiment):
     def plot_seqn_line(path, ll_port, color, marker, label, errorbar_color):
         to_plot = {'x': [], 'y': [], 'dy': []}
         with open(os.path.join(path, "log.txt"), "r") as f:
@@ -34,9 +34,9 @@ def plot_seqn_figure(results):
                  marker=marker)
 
     plt.clf()
-    plot_seqn_line(os.path.join(results, "1-0-100"), 2,
+    plot_seqn_line(os.path.join(results, experiment), 2,
                    'blue', None, "Backup", "darkblue")
-    plot_seqn_line(os.path.join(results, "1-0-100"), 1,
+    plot_seqn_line(os.path.join(results, experiment), 1,
                    'red', None, "Active", "darkred")
     # plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
@@ -44,7 +44,7 @@ def plot_seqn_figure(results):
     plt.ylabel('Sequence Number')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
     plt.savefig(
-        os.path.join(figures_path, f"seqn_figure.pdf"), format="pdf", bbox_inches='tight'
+        os.path.join(figures_path, f"seqn_figure_{experiment}.pdf"), format="pdf", bbox_inches='tight'
     )
 
 
@@ -65,4 +65,4 @@ if __name__ == '__main__':
 
     plt.figure(figsize=(4, 2))
 
-    plot_seqn_figure(results_path)
+    plot_seqn_figure(results_path, "1-1-10")
