@@ -213,6 +213,7 @@ main(int argc, char* argv[])
     }
 
     NS_LOG_INFO("#### RUN PARAMETERS ####");
+    NS_LOG_INFO("Dump Traffic: " + std::to_string(dumpTraffic));
     NS_LOG_INFO("Results Path: " + resultsPath);
     NS_LOG_INFO("N. Live-Live Flows: " + std::to_string(llFlows));
     NS_LOG_INFO("N. Active Flows: " + std::to_string(activeFlows));
@@ -617,10 +618,16 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;
 
-    if (dumpTraffic == 1)
+    if (dumpTraffic)
     {
         csma.EnableAsciiAll(ascii.CreateFileStream(get_path(resultsPath, "p4-switch.tr")));
         csma.EnablePcapAll(get_path(resultsPath, "p4-switch"), true);
+
+        csmaActive.EnableAsciiAll(ascii.CreateFileStream(get_path(resultsPath, "p4-switch.tr")));
+        csmaActive.EnablePcapAll(get_path(resultsPath, "p4-switch"), true);
+
+        csmaBackup.EnableAsciiAll(ascii.CreateFileStream(get_path(resultsPath, "p4-switch.tr")));
+        csmaBackup.EnablePcapAll(get_path(resultsPath, "p4-switch"), true);
     }
 
     FlowMonitorHelper flowHelper;

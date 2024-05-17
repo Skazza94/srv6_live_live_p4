@@ -3,7 +3,7 @@
 active_delay=1
 backup_delay=1
 congestion_control="ns3::TcpVegas"
-dump=0
+dump=false
 for ll in 1
 do
   for backup in 10
