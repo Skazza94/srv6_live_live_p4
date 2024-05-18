@@ -642,15 +642,7 @@ main(int argc, char* argv[])
     Simulator::Stop(Seconds(20));
     Simulator::Run();
     flowMon->CheckForLostPackets();
-    flowMon->SerializeToXmlFile(
-        get_path(resultsPath,
-                 "flow_monitor-ll-" + std::to_string(llFlows) + "-" + std::to_string(activeFlows) +
-                     "-" + std::to_string(backupFlows) + "-" + defaultBandwidth + "-" +
-                     activeBandwidth + "-" + backupBandwidth + "-" + llRate + "-" + activeRate +
-                     "-" + backupRate + "-" + std::to_string(activeDelay) + "-" +
-                     std::to_string(backupDelay) + "-" + congestionControl + ".xml"),
-        true,
-        true);
+    flowMon->SerializeToXmlFile(get_path(resultsPath, "flow_monitor.xml"), true, true);
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
 }
