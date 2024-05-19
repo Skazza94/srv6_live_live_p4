@@ -57,7 +57,7 @@ namespace ns3
       /**
        * \brief Run the provided CLI commands to populate table entries
        */
-      void run_cli(std::string commands);
+      void run_cli_commands(std::string commands);
 
       /**
        * \brief Unused

@@ -33,12 +33,10 @@
 #include <bm/bm_sim/options_parse.h>
 #include <bm/bm_sim/parser.h>
 #include <bm/bm_sim/tables.h>
-#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 #include <unistd.h>
 
 extern int import_primitives();
@@ -132,10 +130,8 @@ P4Pipeline::P4Pipeline(std::string jsonFile, std::string name)
 }
 
 void
-P4Pipeline::run_cli(std::string commands)
+P4Pipeline::run_cli_commands(std::string commands)
 {
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-
     // Run the CLI commands to populate table entries
     int port = get_runtime_port();
     std::string cmd =

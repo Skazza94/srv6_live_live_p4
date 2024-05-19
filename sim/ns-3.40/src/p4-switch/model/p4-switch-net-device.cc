@@ -22,12 +22,15 @@
 #include "ns3/csma-net-device.h"
 #include "ns3/ethernet-header.h"
 #include "ns3/log.h"
+#include "ns3/names.h"
 #include "ns3/node.h"
 #include "ns3/packet.h"
 #include "ns3/simulator.h"
 #include "ns3/string.h"
 #include "ns3/uinteger.h"
-#include "ns3/names.h"
+
+#include <chrono>
+#include <thread>
 
 /**
  * \file
@@ -110,7 +113,7 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
                                      PacketType packetType)
 {
     NS_LOG_FUNCTION_NOARGS();
-    
+
     if (m_p4_pipeline == nullptr)
     {
         InitPipeline();
@@ -119,7 +122,8 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
     std::string node_name = Names::FindName(m_node);
 
     uint32_t port_n = GetPortN(incomingPort);
-    NS_LOG_LOGIC(node_name << " ReceiveFromDevice port " << port_n << " sending through P4 pipeline");
+    NS_LOG_LOGIC(node_name << " ReceiveFromDevice port " << port_n
+                           << " sending through P4 pipeline");
 
     // Re-append Ethernet header, removed by CsmaNetDevice
     Ptr<Packet> full_packet = packet->Copy();
@@ -151,7 +155,8 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
         out_pkt->RemoveHeader(eth_hdr_out);
 
         ByteTagIterator it = packet->GetByteTagIterator();
-        while (it.HasNext()) {
+        while (it.HasNext())
+        {
             ByteTagIterator::Item tag_item = it.Next();
             Callback<ObjectBase*> constructor = tag_item.GetTypeId().GetConstructor();
 
@@ -163,7 +168,8 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
         }
 
         PacketTagIterator pit = packet->GetPacketTagIterator();
-        while (pit.HasNext()) {
+        while (pit.HasNext())
+        {
             PacketTagIterator::Item tag_item = pit.Next();
             Callback<ObjectBase*> constructor = tag_item.GetTypeId().GetConstructor();
 
@@ -174,9 +180,9 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
             out_pkt->AddPacketTag(*tag);
         }
 
-        NS_LOG_DEBUG(node_name << " Forwarding pkt "
-                     << out_pkt << " to port " << item.first << " " << eth_hdr_out.GetDestination()
-                     << " " << eth_hdr_out.GetSource() << " " << eth_hdr_out.GetLengthType());
+        NS_LOG_DEBUG(node_name << " Forwarding pkt " << out_pkt << " to port " << item.first << " "
+                               << eth_hdr_out.GetDestination() << " " << eth_hdr_out.GetSource()
+                               << " " << eth_hdr_out.GetLengthType());
 
         port->SendFrom(out_pkt,
                        eth_hdr_out.GetSource(),
@@ -198,13 +204,22 @@ P4SwitchNetDevice::InitPipeline()
         NS_LOG_DEBUG(node_name << " Initializing up P4 pipeline...");
         m_p4_pipeline = new P4Pipeline(m_pipeline_json, node_name);
         if (!m_pipeline_commands.empty())
-            m_p4_pipeline->run_cli(m_pipeline_commands);
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            m_p4_pipeline->run_cli_commands(m_pipeline_commands);
+        }
     }
     else
     {
         NS_LOG_ERROR(node_name << " Cannot initialize P4 pipeline, abort!");
         std::exit(1);
     }
+}
+
+P4Pipeline*
+P4SwitchNetDevice::GetPipeline()
+{
+    return m_p4_pipeline;
 }
 
 void
