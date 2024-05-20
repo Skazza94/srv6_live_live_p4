@@ -913,7 +913,7 @@ main(int argc, char* argv[])
         ApplicationContainer activeReceiverApp =
             createSinkTcpApplication(activePort + i, activeReceivers.Get(i));
         activeReceiverApp.Start(Seconds(!isMoreThanHalf ? 0.0 : 3.0));
-        activeReceiverApp.Stop(Seconds(flowEndTime));
+        activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
         ApplicationContainer activeSenderApp =
             createOnOffTcpApplication(activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
@@ -932,7 +932,7 @@ main(int argc, char* argv[])
         ApplicationContainer backupReceiverApp =
             createSinkTcpApplication(backupPort + i, backupReceivers.Get(i));
         backupReceiverApp.Start(Seconds(0.0));
-        backupReceiverApp.Stop(Seconds(flowEndTime));
+        backupReceiverApp.Stop(Seconds(flowEndTime + 1));
 
         ApplicationContainer backupSenderApp =
             createOnOffTcpApplication(backupReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
