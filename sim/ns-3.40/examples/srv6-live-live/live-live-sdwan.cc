@@ -27,6 +27,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <string>
 
@@ -34,6 +35,9 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("LiveLiveExample");
 
+uint32_t llFlows = 1;
+uint32_t activeFlows = 1;
+uint32_t backupFlows = 1;
 bool verbose = false;
 
 std::string
@@ -158,103 +162,311 @@ addIpv6Address(Ptr<Ipv6Interface> ipv6Interface, Ipv6AddressHelper* ipv6AddressH
 std::string
 getPath(std::string directory, std::string file)
 {
-    std::string path = directory;
-    if (!directory.empty() && file.back() != '/')
-    {
-        path += '/';
-    }
-    path += file;
-    return path;
+    return SystemPath::Append(directory, file);
 }
 
 /* SD-WAN Controller functions */
-std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t> prevTs;
-std::map<std::pair<Ipv6Address, Ipv6Address>, std::list<int64_t>> latencyMeasurements;
+std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t>* flowPrevTs =
+    new std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t>;
+std::map<std::pair<Ipv6Address, Ipv6Address>, std::list<int64_t>>* flowLatencies =
+    new std::map<std::pair<Ipv6Address, Ipv6Address>, std::list<int64_t>>;
+
+std::map<std::string, std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t>*>* llPrevTs =
+    new std::map<std::string, std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t>*>;
+std::map<std::string,
+         std::map<std::pair<Ipv6Address, Ipv6Address>, std::list<int64_t>>*>* llLatencies =
+    new std::map<std::string, std::map<std::pair<Ipv6Address, Ipv6Address>, std::list<int64_t>>*>;
+
+bool llChecking = false;
+
+Ipv6Prefix srcPrefix("2001::", 64);
+Ipv6Prefix dstPrefix("2002::", 64);
+
+void checkLatency(Ipv6Address srcAddr, Ipv6Address dstAddr, Ptr<Node> e1, Ptr<Node> e2);
 
 void
 pktReceivedNetDevice(std::string context, Ptr<const Packet> p)
 {
-    bool getLatency = false;
-    Ipv6Address srcAddr("2001::1");
-    Ipv6Address dstAddr("2002::1");
-
     Ptr<Packet> pkt = p->Copy();
     EthernetHeader eth;
     pkt->RemoveHeader(eth);
-    if (eth.GetLengthType() == 0x86dd)
-    {
-        Ipv6Header ipv6;
-        pkt->PeekHeader(ipv6, eth.GetHeaderSize());
-        if (ipv6.GetNextHeader() == Ipv6Header::IPV6_EXT_ROUTING)
-        {
-            if (ipv6.GetDestination() == Ipv6Address("e2::2"))
-            {
-                pkt->RemoveHeader(ipv6);
-                /* Really not UDP, but it's 8Bytes! And SRv6 is 24, so remove 3 times. */
-                UdpHeader srv6Hdr;
-                pkt->RemoveHeader(srv6Hdr);
-                pkt->RemoveHeader(srv6Hdr);
-                pkt->RemoveHeader(srv6Hdr);
+    if (eth.GetLengthType() != 0x86dd)
+        return;
 
-                Ipv6Header innerIpv6;
-                pkt->PeekHeader(innerIpv6);
-                if (ipv6.GetSource() == srcAddr && ipv6.GetDestination() == dstAddr)
-                {
-                    getLatency = true;
-                }
-            }
-        }
+    Ipv6Header ipv6;
+    pkt->PeekHeader(ipv6);
+    if (ipv6.GetNextHeader() != Ipv6Header::IPV6_EXT_ROUTING)
+        return;
+
+    bool matched = false;
+    pkt->RemoveHeader(ipv6);
+
+    Ipv6Header innerIpv6;
+    if (!llChecking && ipv6.GetDestination() == Ipv6Address("e2::2"))
+    {
+        /* Really not UDP, but it's 8Bytes! And SRv6 is 24B here, so remove 3 times. */
+        UdpHeader junk;
+        pkt->RemoveHeader(junk);
+        pkt->RemoveHeader(junk);
+        pkt->RemoveHeader(junk);
+
+        pkt->PeekHeader(innerIpv6);
+
+        matched = true;
+    }
+    else if (llChecking && ipv6.GetDestination() == Ipv6Address("e2::55"))
+    {
+        /* Really not UDP, but it's 8Bytes! And SRv6 is 40B here, so remove 5 times. */
+        UdpHeader junk;
+        pkt->RemoveHeader(junk);
+        pkt->RemoveHeader(junk);
+        pkt->RemoveHeader(junk);
+        pkt->RemoveHeader(junk);
+        pkt->RemoveHeader(junk);
+        /* Remove LL TLV */
+        pkt->RemoveHeader(junk);
+
+        pkt->PeekHeader(innerIpv6);
+
+        matched = true;
     }
 
-    std::pair key(srcAddr, dstAddr);
+    if (!matched)
+        return;
 
-    auto tsIt = prevTs.find(key);
-    if (tsIt == prevTs.end())
+    if (innerIpv6.GetSource().HasPrefix(srcPrefix) &&
+        innerIpv6.GetDestination().HasPrefix(dstPrefix))
     {
-        prevTs.insert(std::make_pair(key, Simulator::Now().GetNanoSeconds()));
-    }
-    else
-    {
-        uint64_t latency = Simulator::Now().GetNanoSeconds() - (*tsIt).second;
+        std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t>* tsMapToUse;
+        std::map<std::pair<Ipv6Address, Ipv6Address>, std::list<int64_t>>* latencyMapToUse;
 
-        auto it = latencyMeasurements.find(key);
-        if (it == latencyMeasurements.end())
+        if (!llChecking)
         {
-            std::list<int64_t> latencies;
-            latencies.push_back(latency);
-
-            latencyMeasurements.insert(std::make_pair(key, latencies));
+            tsMapToUse = flowPrevTs;
+            latencyMapToUse = flowLatencies;
         }
         else
         {
-            (*it).second.push_back(latency);
+            auto tsMapIt = llPrevTs->find(context);
+            auto latMapit = llLatencies->find(context);
+            if (tsMapIt == llPrevTs->end())
+            {
+                std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t>* ctxTs =
+                    new std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t>;
+                llPrevTs->insert(std::make_pair(context, ctxTs));
+                tsMapToUse = ctxTs;
+
+                std::map<std::pair<Ipv6Address, Ipv6Address>, std::list<int64_t>>* ctxLat =
+                    new std::map<std::pair<Ipv6Address, Ipv6Address>, std::list<int64_t>>;
+                llLatencies->insert(std::make_pair(context, ctxLat));
+                latencyMapToUse = ctxLat;
+            }
+            else
+            {
+                tsMapToUse = ((*tsMapIt).second);
+                latencyMapToUse = ((*latMapit).second);
+            }
         }
 
-        prevTs.erase(tsIt);
+        std::pair key(innerIpv6.GetSource(), innerIpv6.GetDestination());
+        auto tsIt = tsMapToUse->find(key);
+        if (tsIt == tsMapToUse->end())
+        {
+            tsMapToUse->insert(std::make_pair(key, Simulator::Now().GetNanoSeconds()));
+        }
+        else
+        {
+            uint64_t latency = Simulator::Now().GetNanoSeconds() - (*tsIt).second;
+
+            auto it = latencyMapToUse->find(key);
+            if (it == latencyMapToUse->end())
+            {
+                std::list<int64_t> latencies;
+                latencies.push_back(latency);
+
+                latencyMapToUse->insert(std::make_pair(key, latencies));
+            }
+            else
+            {
+                (*it).second.push_back(latency);
+            }
+
+            tsMapToUse->erase(tsIt);
+        }
     }
 }
 
 /* Enables/Disables Live-Live on the Ingress/Egress switches for an IPv6 Address. */
-void
-toggleLiveLive(Ptr<Node> e1, Ptr<Node> e2, Ipv6Address srcAddr, Ipv6Address dstAddr)
+std::string spreaderHandle;
+std::map<std::pair<Ipv6Address, Ipv6Address>, std::string> flow2Handles;
+
+std::string
+runP4CommandAndGetHandle(P4Pipeline* pipeline, std::string command)
 {
+    std::string output = pipeline->run_cli_commands(command);
+
+    StringVector lines = SplitString(output, "\n");
+    for (auto line : lines)
+    {
+        if (line.find("with handle") != std::string::npos)
+        {
+            StringVector tokens = SplitString(line, " ");
+            return tokens.back();
+        }
+    }
+
+    return "";
+}
+
+void
+enableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
+{
+    llChecking = true;
+
     Ptr<NetDevice> e1Device = e1->GetDevice(e1->GetNDevices() - 1);
     P4SwitchNetDevice* e1P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e1Device)));
     P4Pipeline* e1Pipeline = e1P4Switch->GetPipeline();
 
+    std::pair key(srcAddr, dstAddr);
+    auto it = flow2Handles.find(key);
+    if (it != flow2Handles.end())
+    {
+        std::ostringstream spreaderCommand;
+        spreaderCommand << "table_delete check_live_live_enabled " << (*it).second << std::endl;
+        std::string out = e1Pipeline->run_cli_commands(spreaderCommand.str());
+
+        flow2Handles.erase(it);
+    }
+
     std::ostringstream spreaderCommand;
     spreaderCommand << "table_add check_live_live_enabled live_live_mcast " << srcAddr
                     << "/128 => 1 e1::2 " << std::endl;
-    e1Pipeline->run_cli_commands(spreaderCommand.str());
+    std::string e1Handle = runP4CommandAndGetHandle(e1Pipeline, spreaderCommand.str());
+
+    flow2Handles.insert(std::make_pair(key, e1Handle));
+}
+
+void
+disableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
+{
+    llChecking = false;
+
+    Ptr<NetDevice> e1Device = e1->GetDevice(e1->GetNDevices() - 1);
+    P4SwitchNetDevice* e1P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e1Device)));
+    P4Pipeline* e1Pipeline = e1P4Switch->GetPipeline();
+
+    std::pair key(srcAddr, dstAddr);
+    auto it = flow2Handles.find(key);
+    if (it != flow2Handles.end())
+    {
+        std::ostringstream spreaderCommand;
+        spreaderCommand << "table_delete check_live_live_enabled " << (*it).second << std::endl;
+        std::string out = e1Pipeline->run_cli_commands(spreaderCommand.str());
+
+        flow2Handles.erase(it);
+    }
+}
+
+void
+changeFlowRoute(std::string ctx,
+                Ptr<Node> e1,
+                Ptr<Node> e2,
+                Ipv6Address srcAddr,
+                Ipv6Address dstAddr)
+{
+    StringVector parts = SplitString(ctx, "/");
+    int port = std::stoi(parts[4]) + 1;
+
+    Ptr<NetDevice> e1Device = e1->GetDevice(e1->GetNDevices() - 1);
+    P4SwitchNetDevice* e1P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e1Device)));
+    P4Pipeline* e1Pipeline = e1P4Switch->GetPipeline();
 
     Ptr<NetDevice> e2Device = e2->GetDevice(e2->GetNDevices() - 1);
     P4SwitchNetDevice* e2P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e2Device)));
     P4Pipeline* e2Pipeline = e2P4Switch->GetPipeline();
 
+    std::pair e1Key(srcAddr, dstAddr);
+    auto e1It = flow2Handles.find(e1Key);
+    if (e1It != flow2Handles.end())
+    {
+        std::ostringstream spreaderCommand;
+        spreaderCommand << "table_delete check_live_live_enabled " << (*e1It).second << std::endl;
+        std::string out = e1Pipeline->run_cli_commands(spreaderCommand.str());
+
+        flow2Handles.erase(e1It);
+    }
+
+    std::pair e2Key(dstAddr, srcAddr);
+    auto e2It = flow2Handles.find(e2Key);
+    if (e2It != flow2Handles.end())
+    {
+        std::ostringstream despreaderCommand;
+        despreaderCommand << "table_delete check_live_live_enabled " << (*e2It).second << std::endl;
+        e2Pipeline->run_cli_commands(despreaderCommand.str());
+
+        flow2Handles.erase(e2It);
+    }
+
+    std::ostringstream spreaderCommand;
+    spreaderCommand << "table_add check_live_live_enabled ipv6_encap_forward_port " << srcAddr
+                    << "/128 => e1::2 " << llFlows + activeFlows + backupFlows + port << std::endl;
+    std::string e1Handle = runP4CommandAndGetHandle(e1Pipeline, spreaderCommand.str());
+    flow2Handles.insert(std::make_pair(e1Key, e1Handle));
+
     std::ostringstream despreaderCommand;
-    despreaderCommand << "table_add check_live_live_enabled live_live_mcast "
-        << dstAddr << "/128 => 1 e2::2" << std::endl;
-    e2Pipeline->run_cli_commands(despreaderCommand.str());
+    despreaderCommand << "table_add check_live_live_enabled ipv6_encap_forward_port " << dstAddr
+                      << "/128 => e2::2 " << port << std::endl;
+    std::string e2Handle = runP4CommandAndGetHandle(e2Pipeline, despreaderCommand.str());
+    flow2Handles.insert(std::make_pair(e2Key, e2Handle));
+}
+
+/* Callback to check Live-Live flows latencies on each port and select the best path */
+void
+checkLiveLiveLatency(Ipv6Address srcAddr, Ipv6Address dstAddr, Ptr<Node> e1, Ptr<Node> e2)
+{
+    std::pair key(srcAddr, dstAddr);
+
+    std::string minCtx = "";
+    float minLatency = std::numeric_limits<float>::max();
+    for (auto item : *llLatencies)
+    {
+        auto it = (item.second)->find(key);
+        if (it != (item.second)->end() && !(*it).second.empty())
+        {
+            if (verbose)
+            {
+                for (auto l : (*it).second)
+                {
+                    NS_LOG_INFO(item.first << " latency=" << l);
+                }
+            }
+
+            double sum = std::accumulate((*it).second.begin(), (*it).second.end(), 0.0);
+            double avg = sum / (*it).second.size();
+            avg /= 1000000.0f; // milliseconds
+
+            if (avg < minLatency)
+            {
+                minLatency = avg;
+                minCtx = item.first;
+            }
+        }
+
+        if (it != (item.second)->end())
+        {
+            (*it).second.clear();
+            llPrevTs->at(item.first)->erase(key);
+        }
+    }
+
+    disableLiveLive(e1, srcAddr, dstAddr);
+    if (minCtx != "")
+    {
+        if (verbose)
+            NS_LOG_INFO("Getting best latency of " << minLatency << " on ctx " << minCtx);
+        changeFlowRoute(minCtx, e1, e2, srcAddr, dstAddr);
+    }
+    Simulator::Schedule(Seconds(2), &checkLatency, srcAddr, dstAddr, e1, e2);
 }
 
 /* Callback to check latencies after each interval */
@@ -265,8 +477,8 @@ checkLatency(Ipv6Address srcAddr, Ipv6Address dstAddr, Ptr<Node> e1, Ptr<Node> e
 
     std::pair key(srcAddr, dstAddr);
 
-    auto it = latencyMeasurements.find(key);
-    if (it != latencyMeasurements.end())
+    auto it = flowLatencies->find(key);
+    if (it != flowLatencies->end())
     {
         if (!(*it).second.empty())
         {
@@ -274,31 +486,30 @@ checkLatency(Ipv6Address srcAddr, Ipv6Address dstAddr, Ptr<Node> e1, Ptr<Node> e
             double avg = sum / (*it).second.size();
             avg /= 1000000.0f; // milliseconds
 
-            NS_LOG_INFO(Simulator::Now().GetNanoSeconds() / 1000000000 << " ms " << avg);
+            if (verbose)
+                NS_LOG_INFO(Simulator::Now().GetNanoSeconds() / 1000000000 << " ms " << avg);
 
-            if (avg >= 25.0f)
+            if (avg >= 120.0f)
             {
-                NS_LOG_INFO("AOOOOOOOOOOO");
-                toggleLiveLive(e1, e2, key.first, key.second);
+                Simulator::Schedule(Seconds(5), &checkLiveLiveLatency, srcAddr, dstAddr, e1, e2);
+                enableLiveLive(e1, srcAddr, dstAddr);
                 reschedule = false;
             }
         }
 
         (*it).second.clear();
+        flowPrevTs->erase(key);
     }
 
     if (reschedule)
     {
-        Simulator::Schedule(Seconds(5), &checkLatency, srcAddr, dstAddr, e1, e2);
+        Simulator::Schedule(Seconds(2), &checkLatency, srcAddr, dstAddr, e1, e2);
     }
 }
 
 int
 main(int argc, char* argv[])
 {
-    uint32_t llFlows = 1;
-    uint32_t activeFlows = 1;
-    uint32_t backupFlows = 1;
     std::string resultsPath = "examples/srv6-live-live/results/flow-monitor";
     std::string defaultBandwidth = "50Kbps";
     std::string llRate = "50Kbps";
@@ -710,7 +921,7 @@ main(int argc, char* argv[])
                                       activeSenders.Get(i),
                                       activeRate,
                                       0);
-        activeSenderApp.Start(Seconds(!isMoreThanHalf ? 0.0 : 3.0));
+        activeSenderApp.Start(Seconds(!isMoreThanHalf ? 1.0 : 4.0));
         activeSenderApp.Stop(Seconds(flowEndTime));
     }
 
@@ -749,7 +960,7 @@ main(int argc, char* argv[])
         llSenderApp.Start(Seconds(1.0));
         llSenderApp.Stop(Seconds(flowEndTime));
 
-        Simulator::Schedule(Seconds(5), &checkLatency, srcAddr, dstAddr, e1, e2);
+        Simulator::Schedule(Seconds(2), &checkLatency, srcAddr, dstAddr, e1, e2);
     }
 
     NS_LOG_INFO("Configure Tracing.");
@@ -787,4 +998,9 @@ main(int argc, char* argv[])
     flowMon->SerializeToXmlFile(getPath(resultsPath, "flow_monitor.xml"), true, true);
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
+
+    delete flowPrevTs;
+    delete flowLatencies;
+    delete llPrevTs;
+    delete llLatencies;
 }

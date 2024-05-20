@@ -129,14 +129,28 @@ P4Pipeline::P4Pipeline(std::string jsonFile, std::string name)
     start_and_return();
 }
 
-void
+std::string
 P4Pipeline::run_cli_commands(std::string commands)
 {
     // Run the CLI commands to populate table entries
     int port = get_runtime_port();
     std::string cmd =
         "run_bmv2_CLI --thrift_port " + std::to_string(port) + " \"" + commands + "\"";
-    std::system(cmd.c_str());
+
+    std::string result = "";
+
+    std::shared_ptr<FILE> pipe(popen(cmd.c_str(), "r"), pclose);
+    if (!pipe)
+        return result;
+
+    char buffer[128];
+    while (!feof(pipe.get()))
+    {
+        if (fgets(buffer, 128, pipe.get()) != NULL)
+            result += buffer;
+    }
+
+    return result;
 }
 
 void

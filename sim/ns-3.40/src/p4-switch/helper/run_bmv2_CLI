@@ -5,14 +5,18 @@ import subprocess
 import argparse
 import tempfile
 
+
 def run_CLI(thrift_port, cli_input_commands, log_dir):
     cli = 'simple_switch_CLI'
     with tempfile.TemporaryFile() as fin:
         fin.write(cli_input_commands.encode('utf-8'))
         fin.seek(0)
 
-        p = subprocess.Popen([cli, '--thrift-port', str(thrift_port)], stdin=fin, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        p.wait()
+        p = subprocess.Popen([cli, '--thrift-port', str(thrift_port)], stdin=fin, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        out, _ = p.communicate()
+
+        print(out.decode('utf-8'))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
