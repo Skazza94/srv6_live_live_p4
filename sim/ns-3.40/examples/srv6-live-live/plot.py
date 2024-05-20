@@ -1,5 +1,6 @@
 import json
 import os
+import ipaddress
 import statistics
 import sys
 from datetime import datetime
@@ -9,24 +10,93 @@ import matplotlib.pyplot as plt
 
 figures_path = "figures"
 
+def parse_cwnd_data(file_path):
+    parsed_result = {'x': [], 'y': []}
+    with open(file_path, "r") as cwnd_file:
+        lines = cwnd_file.readlines()
+    
+    for line in lines:
+        line = line.strip().split(" ")
+        parsed_result['x'].append(float(line[0]))
+        parsed_result['y'].append(int(line[1]))
 
-def plot_seqn_figure(results, experiment):
-    def plot_seqn_line(path, ll_port, color, marker, label, errorbar_color):
+    return parsed_result
+
+def plot_cwnd_figure(results):
+    cwnd_results_path = os.path.join(results, "cwnd")
+
+    def plot_cwnd_line(node_type, color, errorbar_color, marker, label):
+        for file_name in os.listdir(cwnd_results_path):
+            if node_type not in file_name:
+                continue
+            to_plot = parse_cwnd_data(os.path.join(cwnd_results_path, file_name))
+            
+            plt.plot(to_plot['x'], to_plot['y'], label=file_name.replace(".data", ""), 
+                     linestyle="dashed", fillstyle='none', color=color, marker=marker)
+            break
+            
+    plt.clf()
+    plot_cwnd_line("ll", 'blue', "darkblue", None, "Live-Live")
+    plot_cwnd_line("backup", 'green', "darkgreen", None, "Backup")
+    plot_cwnd_line("active", 'red', "darkred", None, "Active")
+
+    # plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+    plt.xlabel('Time (s)')
+    plt.ylabel('CWND Size')
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
+    experiment_name = "-".join(results.split("/")[-5:])
+    plt.savefig(
+        os.path.join(figures_path, f"cwnd_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
+    )
+
+
+# def plot_fct_figure(results):
+#     flow_results_path = os.path.join(results, "flows_results.json")
+#     with open(flow_results_path, "r") as flow_results_file: 
+#         flow_results = json.load(flow_results_file)
+
+#     def plot_fct_line(network, color, errorbar_color, marker, label):
+#         to_plot = {'x': [], 'y': []}
+#         network = ipaddress.ip_network(network, strict=False)
+#         for flow_id, flow in flow_results['flows'].items():
+#             ip = ipaddress.ip_address(flow['src_addr'])
+#             if ip in network:
+#                 pass
+            
+#     plt.clf()
+#     plot_fct_line("ll", 'blue', "darkblue", None, "Live-Live")
+#     plot_fct_line("backup", 'green', "darkgreen", None, "Backup")
+#     plot_fct_line("active", 'red', "darkred", None, "Active")
+
+#     # plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+#     plt.xlabel('Time (s)')
+#     plt.ylabel('CWND Size')
+#     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
+#     experiment_name = "-".join(results.split("/")[-5:])
+#     plt.savefig(
+#         os.path.join(figures_path, f"cwnd_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
+#     )
+
+def plot_seqn_figure(results):
+    def plot_seqn_line(ll_port, color, marker, label, errorbar_color):
         to_plot = {'x': [], 'y': [], 'dy': []}
-        with open(os.path.join(path, "log.txt"), "r") as f:
+        with open(os.path.join(results, "log.txt"), "r") as f:
             seqn_lines = f.readlines()
 
         starting_ts = None
         for line in seqn_lines:
+            if not "ll-" in line:
+                continue
             line = line.strip().split()
-            port = int(line[2])
+            port = int(line[-1])
             if port == ll_port:
-                ts = datetime.fromtimestamp(int(line[0])/10**9).timestamp()
+                ts = datetime.fromtimestamp(int(line[6])/10**9).timestamp()
                 if not starting_ts:
                     starting_ts = ts
 
-                seqn = int(line[1])
-                print(ts - starting_ts, seqn)
+                seqn = int(line[9])
                 to_plot['x'].append(ts - starting_ts)
                 to_plot['y'].append(seqn)
 
@@ -34,17 +104,16 @@ def plot_seqn_figure(results, experiment):
                  marker=marker)
 
     plt.clf()
-    plot_seqn_line(os.path.join(results, experiment), 2,
-                   'blue', None, "Backup", "darkblue")
-    plot_seqn_line(os.path.join(results, experiment), 1,
-                   'red', None, "Active", "darkred")
+    plot_seqn_line(2, 'blue', None, "Backup", "darkblue")
+    plot_seqn_line(1, 'red', None, "Active", "darkred")
     # plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     plt.xlabel('Time (s)')
     plt.ylabel('Sequence Number')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
+    experiment_name = "-".join(results.split("/")[-5:])
     plt.savefig(
-        os.path.join(figures_path, f"seqn_figure_{experiment}.pdf"), format="pdf", bbox_inches='tight'
+        os.path.join(figures_path, f"seqn_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
     )
 
 
@@ -54,7 +123,7 @@ if __name__ == '__main__':
             "Usage: plot.py <results_path> <figures_path>"
         )
         exit(1)
-
+    
     results_path = os.path.abspath(sys.argv[1])
     figures_path = os.path.abspath(sys.argv[2])
 
@@ -65,4 +134,6 @@ if __name__ == '__main__':
 
     plt.figure(figsize=(4, 2))
 
-    plot_seqn_figure(results_path, "1-1-10")
+    plot_seqn_figure(results_path)
+    plot_cwnd_figure(results_path)
+    # plot_fct_figure(results_path)
