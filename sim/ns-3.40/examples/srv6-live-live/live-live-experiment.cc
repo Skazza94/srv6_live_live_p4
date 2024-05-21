@@ -523,15 +523,19 @@ CwndChange(Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
         {
             convertToMacAddress(llSenderIpv6Interfaces[i]->GetDevice()->GetAddress())
                 .CopyTo(mac_str);
-            spreaderPortsCommand << "table_add ipv6_forward forward 2001::" << i + 1 << "/128 => "
-                                 << i + 1 << " " << getMacString(mac_str) << std::endl;
+
+            Ipv6Address addr = llSenderIpv6Interfaces[i]->GetAddress(2).GetAddress();
+            spreaderPortsCommand << "table_add ipv6_forward forward " << addr << "/128 => " << i + 1
+                                 << " " << getMacString(mac_str) << std::endl;
         }
 
         for (uint32_t i = 0; i < activeFlows; i++)
         {
             convertToMacAddress(activeSenderIpv6Interfaces[i]->GetDevice()->GetAddress())
                 .CopyTo(mac_str);
-            spreaderPortsCommand << "table_add ipv6_forward forward 2003::" << i + 1 << "/128 => "
+
+            Ipv6Address addr = activeSenderIpv6Interfaces[i]->GetAddress(2).GetAddress();
+            spreaderPortsCommand << "table_add ipv6_forward forward " << addr << "/128 => "
                                  << llFlows + i + 1 << " " << getMacString(mac_str) << std::endl;
         }
 
@@ -539,7 +543,9 @@ CwndChange(Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
         {
             convertToMacAddress(backupSenderIpv6Interfaces[i]->GetDevice()->GetAddress())
                 .CopyTo(mac_str);
-            spreaderPortsCommand << "table_add ipv6_forward forward 2005::" << i + 1 << "/128 => "
+
+            Ipv6Address addr = backupSenderIpv6Interfaces[i]->GetAddress(2).GetAddress();
+            spreaderPortsCommand << "table_add ipv6_forward forward " << addr << "/128 => "
                                  << llFlows + activeFlows + i + 1 << " " << getMacString(mac_str)
                                  << std::endl;
         }
@@ -567,21 +573,27 @@ CwndChange(Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
         {
             convertToMacAddress(llReceiverIpv6Interfaces[i]->GetDevice()->GetAddress())
                 .CopyTo(mac_str);
-            despreaderPortsCommand << "table_add ipv6_forward forward 2002::" << i + 1 << "/128 => "
+
+            Ipv6Address addr = llReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress();
+            despreaderPortsCommand << "table_add ipv6_forward forward " << addr << "/128 => "
                                    << 3 + i << " " << getMacString(mac_str) << std::endl;
         }
         for (uint32_t i = 0; i < activeFlows; i++)
         {
             convertToMacAddress(activeReceiverIpv6Interfaces[i]->GetDevice()->GetAddress())
                 .CopyTo(mac_str);
-            despreaderPortsCommand << "table_add ipv6_forward forward 2004::" << i + 1 << "/128 => "
+
+            Ipv6Address addr = activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress();
+            despreaderPortsCommand << "table_add ipv6_forward forward " << addr << "/128 => "
                                    << 3 + llFlows + i << " " << getMacString(mac_str) << std::endl;
         }
         for (uint32_t i = 0; i < backupFlows; i++)
         {
             convertToMacAddress(backupReceiverIpv6Interfaces[i]->GetDevice()->GetAddress())
                 .CopyTo(mac_str);
-            despreaderPortsCommand << "table_add ipv6_forward forward 2006::" << i + 1 << "/128 => "
+
+            Ipv6Address addr = backupReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress();
+            despreaderPortsCommand << "table_add ipv6_forward forward " << addr << "/128 => "
                                    << 3 + llFlows + activeFlows + i << " " << getMacString(mac_str)
                                    << std::endl;
         }
