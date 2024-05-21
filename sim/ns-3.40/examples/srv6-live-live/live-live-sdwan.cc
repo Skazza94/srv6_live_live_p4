@@ -852,10 +852,10 @@ main(int argc, char* argv[])
     for (uint32_t i = 0; i < llFlows; i++)
     {
         convertToMacAddress(llReceiverIpv6Interfaces[i]->GetDevice()->GetAddress()).CopyTo(mac_str);
-        
+
         Ipv6Address addr = llReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress();
-        despreaderPortsCommand << "table_add ipv6_forward forward " << addr << "/128 => "
-                               << 3 + i << " " << getMacString(mac_str) << std::endl;
+        despreaderPortsCommand << "table_add ipv6_forward forward " << addr << "/128 => " << 3 + i
+                               << " " << getMacString(mac_str) << std::endl;
     }
     for (uint32_t i = 0; i < activeFlows; i++)
     {
