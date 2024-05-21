@@ -980,14 +980,17 @@ main(int argc, char* argv[])
 
     if (dumpTraffic)
     {
-        csma.EnableAsciiAll(ascii.CreateFileStream(getPath(resultsPath, "p4-switch.tr")));
-        csma.EnablePcapAll(getPath(resultsPath, "p4-switch"), true);
+        std::string tracesPath = getPath(resultsPath, "traces");
+        std::filesystem::create_directories(tracesPath);
 
-        csmaActive.EnableAsciiAll(ascii.CreateFileStream(getPath(resultsPath, "p4-switch.tr")));
-        csmaActive.EnablePcapAll(getPath(resultsPath, "p4-switch"), true);
+        csma.EnableAsciiAll(ascii.CreateFileStream(getPath(tracesPath, "p4-switch.tr")));
+        csma.EnablePcapAll(getPath(tracesPath, "p4-switch"), true);
 
-        csmaBackup.EnableAsciiAll(ascii.CreateFileStream(getPath(resultsPath, "p4-switch.tr")));
-        csmaBackup.EnablePcapAll(getPath(resultsPath, "p4-switch"), true);
+        csmaActive.EnableAsciiAll(ascii.CreateFileStream(getPath(tracesPath, "p4-switch.tr")));
+        csmaActive.EnablePcapAll(getPath(tracesPath, "p4-switch"), true);
+
+        csmaBackup.EnableAsciiAll(ascii.CreateFileStream(getPath(tracesPath, "p4-switch.tr")));
+        csmaBackup.EnablePcapAll(getPath(tracesPath, "p4-switch"), true);
     }
 
     FlowMonitorHelper flowHelper;
@@ -1007,7 +1010,11 @@ main(int argc, char* argv[])
     Simulator::Stop(Seconds(endTime));
     Simulator::Run();
     flowMon->CheckForLostPackets();
-    flowMon->SerializeToXmlFile(getPath(resultsPath, "flow_monitor.xml"), true, true);
+
+    std::string flowMonitorPath = getPath(resultsPath, "flow-monitor");
+    std::filesystem::create_directories(flowMonitorPath);
+    flowMon->SerializeToXmlFile(getPath(flowMonitorPath, "flow_monitor.xml"), true, true);
+
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
 
