@@ -25,20 +25,25 @@ def parse_cwnd_data(file_path):
 def plot_cwnd_figure(results):
     cwnd_results_path = os.path.join(results, "cwnd")
 
-    def plot_cwnd_line(node_type, color, errorbar_color, marker, label):
-        for file_name in os.listdir(cwnd_results_path):
+    def plot_cwnd_line(node_type, color, errorbar_color, marker, label, end_x=None):
+        for file_name in sorted(os.listdir(cwnd_results_path)):
             if node_type not in file_name:
                 continue
             to_plot = parse_cwnd_data(os.path.join(cwnd_results_path, file_name))
+
+            if end_x: 
+                to_plot['x'].append(end_x)
+                to_plot['y'].append(to_plot['y'][-1])
             
             plt.plot(to_plot['x'], to_plot['y'], label=file_name.replace(".data", ""), 
                      linestyle="dashed", fillstyle='none', color=color, marker=marker)
-            break
+            return to_plot['x']
             
     plt.clf()
-    plot_cwnd_line("ll", 'blue', "darkblue", None, "Live-Live")
-    plot_cwnd_line("backup", 'green', "darkgreen", None, "Backup")
+    x_values = plot_cwnd_line("ll", 'blue', "darkblue", None, "Live-Live")
     plot_cwnd_line("active", 'red', "darkred", None, "Active")
+    plot_cwnd_line("backup", 'green', "darkgreen", None, "Backup")
+
 
     # plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
@@ -99,7 +104,7 @@ def plot_seqn_figure(results):
                 seqn = int(line[9])
                 to_plot['x'].append(ts - starting_ts)
                 to_plot['y'].append(seqn)
-
+        print(ll_port, len(to_plot["x"]))
         plt.plot(to_plot['x'], to_plot['y'], label=label, linestyle="dashed", fillstyle='none', color=color,
                  marker=marker)
 
