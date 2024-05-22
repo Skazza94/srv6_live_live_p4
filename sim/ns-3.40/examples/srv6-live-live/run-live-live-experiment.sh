@@ -1,17 +1,17 @@
 #!/bin/bash
 
 default_bw="25Gbps"
-active_bw="1Gbps"
+active_bw="25Gbps"
 backup_bw="25Gbps"
-ll_rate="1Mbps"
-active_rate="4Mbps"
+ll_rate="4Mbps"
+active_rate="1Mbps"
 backup_rate="1Mbps"
 active_delay="5us"
 backup_delay="5us"
 congestion_control="TcpCubic"
-ll_flows=0
-active_flows=1
-backup_flows=0
+ll_flows=1
+active_flows=30
+backup_flows=10
 default_buffer="10000p"
 active_buffer="10000p"
 backup_buffer="10000p"

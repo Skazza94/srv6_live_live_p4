@@ -111,7 +111,7 @@ createUdpApplication(Ipv6Address addressToReach,
 
     ApplicationContainer senderApp = source.Install(node);
 
-    double startTime = 0.0;
+    double startTime = 1.0;
     double endTime = flowEndTime;
     if (generateRandom)
     {
@@ -243,7 +243,7 @@ TraceCwnd(std::string fileName, uint32_t nodeId)
 
 std::map<std::string, std::pair<uint64_t, uint64_t>> ctx2tpInfo;
 std::map<std::string, Ptr<OutputStreamWrapper>> tpStream;
-Time period = Time::FromInteger(500, Time::Unit::MS);
+Time period = Time::FromInteger(100, Time::Unit::MS);
 
 void
 tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
@@ -279,7 +279,7 @@ void
 startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
 {
     std::string nsString = "/NodeList/" + std::to_string(nodeId) + "/DeviceList/" +
-                           std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacTx";
+                           std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacRx";
 
     AsciiTraceHelper ascii;
     auto it = tpStream.find(nsString);
@@ -813,19 +813,32 @@ main(int argc, char* argv[])
         }
     }
 
-    /* Add Bandwidth monitor only on the interface 0 of c1 and c2 */
     std::string tpPath = getPath(resultsPath, "throughput");
     std::filesystem::create_directories(tpPath);
-    Simulator::Schedule(Seconds(0),
-                        &startThroughputTrace,
-                        getPath(tpPath, "e1-0-tp.data"),
-                        e1->GetId(),
-                        llFlows + activeFlows + backupFlows);
-    Simulator::Schedule(Seconds(0),
-                        &startThroughputTrace,
-                        getPath(tpPath, "e1-1-tp.data"),
-                        e1->GetId(),
-                        llFlows + activeFlows + backupFlows + 1);
+    for (uint32_t i = 0; i < llFlows; i++)
+    {
+        Simulator::Schedule(Seconds(0),
+                            &startThroughputTrace,
+                            getPath(tpPath, "ll-" + std::to_string(i) + "-tp.data"),
+                            llReceivers.Get(i)->GetId(),
+                            0);
+    }
+    for (uint32_t i = 0; i < activeFlows; i++)
+    {
+        Simulator::Schedule(Seconds(0),
+                            &startThroughputTrace,
+                            getPath(tpPath, "active-" + std::to_string(i) + "-tp.data"),
+                            activeReceivers.Get(i)->GetId(),
+                            0);
+    }
+    for (uint32_t i = 0; i < backupFlows; i++)
+    {
+        Simulator::Schedule(Seconds(0),
+                            &startThroughputTrace,
+                            getPath(tpPath, "backup-" + std::to_string(i) + "-tp.data"),
+                            backupReceivers.Get(i)->GetId(),
+                            0);
+    }
 
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;

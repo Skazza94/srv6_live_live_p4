@@ -7,10 +7,11 @@ from datetime import datetime
 
 import matplotlib
 import matplotlib.pyplot as plt
+from sortedcontainers import SortedDict
 
 figures_path = "figures"
 
-def parse_cwnd_data(file_path):
+def parse_data_file(file_path):
     parsed_result = {'x': [], 'y': []}
     with open(file_path, "r") as cwnd_file:
         lines = cwnd_file.readlines()
@@ -22,6 +23,7 @@ def parse_cwnd_data(file_path):
 
     return parsed_result
 
+
 def plot_cwnd_figure(results):
     cwnd_results_path = os.path.join(results, "cwnd")
 
@@ -29,7 +31,7 @@ def plot_cwnd_figure(results):
         for file_name in sorted(os.listdir(cwnd_results_path)):
             if node_type not in file_name:
                 continue
-            to_plot = parse_cwnd_data(os.path.join(cwnd_results_path, file_name))
+            to_plot = parse_data_file(os.path.join(cwnd_results_path, file_name))
 
             if end_x: 
                 to_plot['x'].append(end_x)
@@ -57,24 +59,46 @@ def plot_cwnd_figure(results):
 
 
 def plot_throughput_figure(results):
+    params = results.split('/')[-7:]
+    (_, n_active_flows, n_backup_flows) = params[0].split('-')
+    n_active_flows = int(n_active_flows)
+    n_backup_flows = int(n_backup_flows)
+
     cwnd_results_path = os.path.join(results, "throughput")
 
-    def plot_throughput_line(node_type, color, errorbar_color, marker, label):
+    def plot_throughput_line(node_type, color, errorbar_color, marker, label, single_file, expected_vals=0):
+        to_plot_type = SortedDict()
+
         for file_name in os.listdir(cwnd_results_path):
             if node_type not in file_name:
                 continue
-            to_plot = parse_cwnd_data(os.path.join(cwnd_results_path, file_name))
             
-            plt.plot(to_plot['x'], [y / 1000000 for y in to_plot['y']], label=file_name.replace(".data", ""), 
-                     linestyle="dashed", fillstyle='none', color=color, marker=marker)
-            break
+            to_plot = parse_data_file(os.path.join(cwnd_results_path, file_name))
+
+            for idx, t in enumerate(to_plot['x']):
+                r_t = round(t, 1) if not single_file else t
+
+                if r_t not in to_plot_type:
+                    to_plot_type[r_t] = []
+                to_plot_type[r_t].append(to_plot['y'][idx])
+
+        to_plot_filtered = {}
+        for t, vals in to_plot_type.items():
+            if single_file:
+                to_plot_filtered[t] = vals[0]
+            else:
+                if len(vals) == expected_vals:
+                    to_plot_filtered[t] = sum(vals)
+            
+        plt.plot(to_plot_filtered.keys(), [y / 1000000 for y in to_plot_filtered.values()], label=label, 
+                    linestyle="dashed", fillstyle='none', color=color, marker=marker)
             
     plt.clf()
-    plot_throughput_line("e1-0", 'blue', "darkblue", None, "E1-0")
-    plot_throughput_line("e1-1", 'green', "darkgreen", None, "E1-1")
+    plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live", True)
+    plot_throughput_line("active", 'green', "darkgreen", None, "Active", False, n_active_flows)
+    plot_throughput_line("backup", 'red', "darkred", None, "Backup", False, n_backup_flows)
 
-    # plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-
+    plt.ylim(bottom=0)
     plt.xlabel('Time [s]')
     plt.ylabel('Throughput [Mbps]')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
@@ -131,7 +155,6 @@ def plot_seqn_figure(results):
                 seqn = int(line[9])
                 to_plot['x'].append(ts - starting_ts)
                 to_plot['y'].append(seqn)
-        print(ll_port, len(to_plot["x"]))
         plt.plot(to_plot['x'], to_plot['y'], label=label, linestyle="dashed", fillstyle='none', color=color,
                  marker=marker)
 
