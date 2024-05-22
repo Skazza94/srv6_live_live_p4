@@ -36,7 +36,7 @@ NS_LOG_COMPONENT_DEFINE("LiveLiveExample");
 
 bool verbose = false;
 
-uint32_t SEED = 10;
+uint32_t seed = 10;
 std::mt19937 randomGen;
 std::uniform_real_distribution distribution;
 
@@ -81,38 +81,35 @@ addIpv6ArpEntry(Ptr<Ipv6Interface> interface, Ipv6Address ipv6Address, Mac48Addr
 }
 
 ApplicationContainer
-createOnOffTcpApplication(Ipv6Address addressToReach,
-                          uint16_t port,
-                          Ptr<Node> node,
-                          std::string data_rate,
-                          uint32_t max_bytes)
+createTcpApplication(Ipv6Address addressToReach,
+                     uint16_t port,
+                     Ptr<Node> node,
+                     std::string dataRate,
+                     uint32_t maxBytes)
 {
-    OnOffHelper onoff("ns3::TcpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
-    onoff.SetConstantRate(DataRate(data_rate), 512);
-    //    onoff.SetAttribute("DataRate", StringValue(data_rate));
-    onoff.SetAttribute("MaxBytes", UintegerValue(max_bytes));
-    //    onoff.SetAttribute("PacketSize", UintegerValue(1500));
+    OnOffHelper source("ns3::TcpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
+    source.SetConstantRate(DataRate(dataRate), 1400);
+    // source.SetAttribute("DataRate", StringValue(dataRate));
+    source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
+    // source.SetAttribute("SendSize", UintegerValue(1400));
 
-    ApplicationContainer senderApp = onoff.Install(node);
-    return senderApp;
+    return source.Install(node);
 }
 
 ApplicationContainer
-createOnOffUdpApplication(Ipv6Address addressToReach,
-                          uint16_t port,
-                          Ptr<Node> node,
-                          std::string data_rate,
-                          uint32_t flowEndTime,
-                          uint32_t max_bytes,
-                          bool generateRandom)
+createUdpApplication(Ipv6Address addressToReach,
+                     uint16_t port,
+                     Ptr<Node> node,
+                     std::string dataRate,
+                     uint32_t flowEndTime,
+                     uint32_t maxBytes,
+                     bool generateRandom)
 {
-    OnOffHelper onoff("ns3::UdpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
-    onoff.SetConstantRate(DataRate(data_rate), 512);
-    //    onoff.SetAttribute("DataRate", StringValue(data_rate));
-    onoff.SetAttribute("MaxBytes", UintegerValue(max_bytes));
-    //    onoff.SetAttribute("PacketSize", UintegerValue(1500));
+    OnOffHelper source("ns3::UdpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
+    source.SetConstantRate(DataRate(dataRate), 1400);
+    source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
 
-    ApplicationContainer senderApp = onoff.Install(node);
+    ApplicationContainer senderApp = source.Install(node);
 
     double startTime = 0.0;
     double endTime = flowEndTime;
@@ -134,8 +131,7 @@ createSinkTcpApplication(uint16_t port, Ptr<Node> node)
 {
     PacketSinkHelper sink("ns3::TcpSocketFactory",
                           Address(Inet6SocketAddress(Ipv6Address::GetAny(), port)));
-    ApplicationContainer receiverApp = sink.Install(node);
-    return receiverApp;
+    return sink.Install(node);
 }
 
 ApplicationContainer
@@ -143,8 +139,7 @@ createSinkUdpApplication(uint16_t port, Ptr<Node> node)
 {
     PacketSinkHelper sink("ns3::UdpSocketFactory",
                           Address(Inet6SocketAddress(Ipv6Address::GetAny(), port)));
-    ApplicationContainer receiverApp = sink.Install(node);
-    return receiverApp;
+    return sink.Install(node);
 }
 
 Ptr<Ipv6Interface>
@@ -251,7 +246,7 @@ std::map<std::string, Ptr<OutputStreamWrapper>> tpStream;
 Time period = Time::FromInteger(500, Time::Unit::MS);
 
 void
-trackePktReceivedNetDevice(std::string context, Ptr<const Packet> p)
+tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
 {
     uint64_t lastTs = Simulator::Now().GetNanoSeconds();
     uint32_t pktSize = p->GetSize() * 8;
@@ -291,7 +286,7 @@ startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
     if (it == tpStream.end())
         tpStream[nsString] = ascii.CreateFileStream(fileName);
 
-    Config::Connect(nsString, MakeCallback(&trackePktReceivedNetDevice));
+    Config::Connect(nsString, MakeCallback(&tracePktTxNetDevice));
 }
 
 int
@@ -304,10 +299,10 @@ main(int argc, char* argv[])
     std::string defaultBandwidth = "50Kbps";
     std::string llRate = "50Kbps";
     std::string activeBandwidth = "50Kbps";
-    uint32_t activeDelay = 0;
+    std::string activeDelay = "0us";
     std::string activeRate = "50Kbps";
     std::string backupBandwidth = "50Kbps";
-    uint32_t backupDelay = 0;
+    std::string backupDelay = "0us";
     std::string backupRate = "50Kbps";
     std::string congestionControl = "ns3::TcpLinuxReno";
     float flowEndTime = 11.0f;
@@ -340,7 +335,7 @@ main(int argc, char* argv[])
     cmd.AddValue("active-buffer", "The size of the active buffers", activeBuffer);
     cmd.AddValue("backup-buffer", "The size of the backup buffers", backupBuffer);
     cmd.AddValue("random", "Select whether UDP flows are randomly distributed.", generateRandom);
-    cmd.AddValue("seed", "The seed used for the simulation", SEED);
+    cmd.AddValue("seed", "The seed used for the simulation", seed);
     cmd.AddValue("dump", "Dump traffic during the simulation", dumpTraffic);
     cmd.AddValue("verbose", "Verbose output", verbose);
     cmd.Parse(argc, argv);
@@ -365,8 +360,8 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Live-Live TCP Rate: " + llRate);
     NS_LOG_INFO("Active Flows Rate: " + activeRate);
     NS_LOG_INFO("Backup Flows Rate: " + backupRate);
-    NS_LOG_INFO("Active Path Delay: " + std::to_string(activeDelay));
-    NS_LOG_INFO("Backup Path Delay: " + std::to_string(backupDelay));
+    NS_LOG_INFO("Active Path Delay: " + activeDelay);
+    NS_LOG_INFO("Backup Path Delay: " + backupDelay);
     NS_LOG_INFO("Default Buffer Size: " + defaultBuffer);
     NS_LOG_INFO("Active Buffer Size: " + activeBuffer);
     NS_LOG_INFO("Backup Buffer Size: " + backupBuffer);
@@ -376,7 +371,7 @@ main(int argc, char* argv[])
 
     std::filesystem::create_directories(resultsPath);
 
-    randomGen = std::mt19937(SEED);
+    randomGen = std::mt19937(seed);
     distribution = std::uniform_real_distribution(0.0, (double)flowEndTime);
 
     NodeContainer llSenders;
@@ -415,19 +410,21 @@ main(int argc, char* argv[])
     Ptr<Node> c2 = forwardSwitches.Get(1);
     Names::Add("c2", c2);
 
-    //    Config::SetDefault("ns3::DropTailQueue::MaxPackets", UintegerValue(1));
     CsmaHelper csma;
     csma.SetChannelAttribute("DataRate", StringValue(defaultBandwidth));
-    csma.SetQueue("ns3::DropTailQueue<Packet>", "MaxSize", StringValue(defaultBuffer));
+    csma.SetDeviceAttribute("Mtu", UintegerValue(1500));
+    // csma.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(defaultBuffer));
 
     CsmaHelper csmaActive;
     csmaActive.SetChannelAttribute("DataRate", StringValue(activeBandwidth));
-    csmaActive.SetChannelAttribute("Delay", TimeValue(MilliSeconds(activeDelay)));
+    csmaActive.SetChannelAttribute("Delay", TimeValue(Time(activeDelay)));
+    csmaActive.SetDeviceAttribute("Mtu", UintegerValue(1500));
     csmaActive.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(activeBuffer));
 
     CsmaHelper csmaBackup;
     csmaBackup.SetChannelAttribute("DataRate", StringValue(backupBandwidth));
-    csmaBackup.SetChannelAttribute("Delay", TimeValue(MilliSeconds(backupDelay)));
+    csmaBackup.SetChannelAttribute("Delay", TimeValue(Time(backupDelay)));
+    csmaBackup.SetDeviceAttribute("Mtu", UintegerValue(1500));
     csmaBackup.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(backupBuffer));
 
     NetDeviceContainer activeSenderInterfaces;
@@ -721,7 +718,7 @@ main(int argc, char* argv[])
     forwardHelper.Install(c2, c2Interfaces);
 
     NS_LOG_INFO("Configuring Congestion Control.");
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue(congestionControl));
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
 
     NS_LOG_INFO("Create Applications.");
     uint16_t activePort = 20000;
@@ -735,11 +732,11 @@ main(int argc, char* argv[])
         activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
         ApplicationContainer activeSenderApp =
-            createOnOffTcpApplication(activeReceiverIpv6Interfaces[0]->GetAddress(2).GetAddress(),
-                                      activePort,
-                                      activeSenders.Get(0),
-                                      activeRate,
-                                      0);
+            createTcpApplication(activeReceiverIpv6Interfaces[0]->GetAddress(2).GetAddress(),
+                                 activePort,
+                                 activeSenders.Get(0),
+                                 activeRate,
+                                 0);
         activeSenderApp.Start(Seconds(1.0));
         activeSenderApp.Stop(Seconds(flowEndTime));
 
@@ -749,14 +746,14 @@ main(int argc, char* argv[])
             activeReceiverApp.Start(Seconds(0.0));
             activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-            activeSenderApp = createOnOffUdpApplication(
-                activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
-                activePort + i,
-                activeSenders.Get(i),
-                activeRate,
-                flowEndTime,
-                0,
-                generateRandom);
+            activeSenderApp =
+                createUdpApplication(activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
+                                     activePort + i,
+                                     activeSenders.Get(i),
+                                     activeRate,
+                                     flowEndTime,
+                                     0,
+                                     generateRandom);
         }
     }
 
@@ -770,11 +767,11 @@ main(int argc, char* argv[])
         backupReceiverApp.Stop(Seconds(flowEndTime + 1));
 
         ApplicationContainer backupSenderApp =
-            createOnOffTcpApplication(backupReceiverIpv6Interfaces[0]->GetAddress(2).GetAddress(),
-                                      backupPort,
-                                      backupSenders.Get(0),
-                                      backupRate,
-                                      0);
+            createTcpApplication(backupReceiverIpv6Interfaces[0]->GetAddress(2).GetAddress(),
+                                 backupPort,
+                                 backupSenders.Get(0),
+                                 backupRate,
+                                 0);
         backupSenderApp.Start(Seconds(1.0));
         backupSenderApp.Stop(Seconds(flowEndTime));
 
@@ -784,14 +781,14 @@ main(int argc, char* argv[])
             backupReceiverApp.Start(Seconds(0.0));
             backupReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-            backupSenderApp = createOnOffUdpApplication(
-                backupReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
-                backupPort + i,
-                backupSenders.Get(i),
-                backupRate,
-                flowEndTime,
-                0,
-                generateRandom);
+            backupSenderApp =
+                createUdpApplication(backupReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
+                                     backupPort + i,
+                                     backupSenders.Get(i),
+                                     backupRate,
+                                     flowEndTime,
+                                     0,
+                                     generateRandom);
         }
     }
 
@@ -806,11 +803,11 @@ main(int argc, char* argv[])
             llReceiverApp.Stop(Seconds(flowEndTime + 1));
 
             ApplicationContainer llSenderApp =
-                createOnOffTcpApplication(llReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
-                                          llPort + i,
-                                          llSenders.Get(i),
-                                          llRate,
-                                          0);
+                createTcpApplication(llReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
+                                     llPort + i,
+                                     llSenders.Get(i),
+                                     llRate,
+                                     0);
             llSenderApp.Start(Seconds(1.0));
             llSenderApp.Stop(Seconds(flowEndTime));
         }
@@ -842,11 +839,17 @@ main(int argc, char* argv[])
         Simulator::Schedule(Seconds(2), &TraceCwnd, path, llSenders.Get(i)->GetId());
     }
 
-    std::string path = getPath(cwndPath, "active-sender-" + std::to_string(0) + "-cwnd.data");
-    Simulator::Schedule(Seconds(2), &TraceCwnd, path, activeSenders.Get(0)->GetId());
+    if (activeFlows > 0)
+    {
+        std::string path = getPath(cwndPath, "active-sender-0-cwnd.data");
+        Simulator::Schedule(Seconds(2), &TraceCwnd, path, activeSenders.Get(0)->GetId());
+    }
 
-    path = getPath(cwndPath, "backup-sender-" + std::to_string(0) + "-cwnd.data");
-    Simulator::Schedule(Seconds(2), &TraceCwnd, path, backupSenders.Get(0)->GetId());
+    if (backupFlows > 0)
+    {
+        std::string path = getPath(cwndPath, "backup-sender-0-cwnd.data");
+        Simulator::Schedule(Seconds(2), &TraceCwnd, path, backupSenders.Get(0)->GetId());
+    }
 
     if (dumpTraffic)
     {

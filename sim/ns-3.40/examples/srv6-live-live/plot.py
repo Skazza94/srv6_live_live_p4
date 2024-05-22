@@ -119,7 +119,7 @@ def plot_seqn_figure(results):
 
         starting_ts = None
         for line in seqn_lines:
-            if not "ll-" in line:
+            if not "ll-pkt-seqno" in line:
                 continue
             line = line.strip().split()
             port = int(line[-1])
