@@ -27,6 +27,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <random>
 #include <string>
 
 using namespace ns3;
@@ -35,13 +36,17 @@ NS_LOG_COMPONENT_DEFINE("LiveLiveExample");
 
 bool verbose = false;
 
+uint32_t SEED = 10;
+std::mt19937 randomGen;
+std::uniform_real_distribution distribution;
+
 std::string
 getMacString(uint8_t* mac)
 {
     std::string s = "0x";
     std::ostringstream oss;
     oss << std::hex << std::setfill('0');
-    for (int i = 0; i < 6; i++)
+    for (uint32_t i = 0; i < 6; i++)
     {
         oss << std::setw(2) << (int)mac[i];
     }
@@ -97,15 +102,24 @@ createOnOffUdpApplication(Ipv6Address addressToReach,
                           uint16_t port,
                           Ptr<Node> node,
                           std::string data_rate,
+                          uint32_t flowEndTime,
                           uint32_t max_bytes)
 {
     OnOffHelper onoff("ns3::UdpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
     onoff.SetConstantRate(DataRate(data_rate), 512);
     //    onoff.SetAttribute("DataRate", StringValue(data_rate));
     onoff.SetAttribute("MaxBytes", UintegerValue(max_bytes));
-    //    onoff.SetAttribute("PacketSize", UintegerValue(1500));
+//    onoff.SetAttribute("PacketSize", UintegerValue(1500));
 
     ApplicationContainer senderApp = onoff.Install(node);
+
+    double startTime = distribution(randomGen);
+    std::uniform_real_distribution endDistribution(startTime + 0.3, (double)flowEndTime);
+    double endTime = endDistribution(randomGen);
+    NS_LOG_INFO("UDP Application: " + std::to_string(startTime) + " - " + std::to_string(endTime));
+    senderApp.Start(Seconds(startTime));
+    senderApp.Stop(Seconds(endTime));
+
     return senderApp;
 }
 
@@ -270,6 +284,7 @@ main(int argc, char* argv[])
     cmd.AddValue("default-buffer", "The size of the default buffers", defaultBuffer);
     cmd.AddValue("active-buffer", "The size of the active buffers", activeBuffer);
     cmd.AddValue("backup-buffer", "The size of the backup buffers", backupBuffer);
+    cmd.AddValue("seed", "The seed used for the simulation", SEED);
     cmd.AddValue("dump", "Dump traffic during the simulation", dumpTraffic);
     cmd.AddValue("verbose", "Verbose output", verbose);
     cmd.Parse(argc, argv);
@@ -304,6 +319,9 @@ main(int argc, char* argv[])
     NS_LOG_INFO("End Time: " + std::to_string(endTime));
 
     std::filesystem::create_directories(resultsPath);
+
+    randomGen = std::mt19937(SEED);
+    distribution = std::uniform_real_distribution(0.0, (double)flowEndTime);
 
     NodeContainer llSenders;
     llSenders.Create(llFlows);
@@ -349,12 +367,12 @@ main(int argc, char* argv[])
     CsmaHelper csmaActive;
     csmaActive.SetChannelAttribute("DataRate", StringValue(activeBandwidth));
     csmaActive.SetChannelAttribute("Delay", TimeValue(MilliSeconds(activeDelay)));
-        csmaActive.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue(activeBuffer));
+    csmaActive.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(activeBuffer));
 
     CsmaHelper csmaBackup;
     csmaBackup.SetChannelAttribute("DataRate", StringValue(backupBandwidth));
     csmaBackup.SetChannelAttribute("Delay", TimeValue(MilliSeconds(backupDelay)));
-        csmaBackup.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue(backupBuffer));
+    csmaBackup.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(backupBuffer));
 
     NetDeviceContainer activeSenderInterfaces;
     NetDeviceContainer backupSenderInterfaces;
@@ -680,9 +698,8 @@ main(int argc, char* argv[])
                 activePort + i,
                 activeSenders.Get(i),
                 activeRate,
+                flowEndTime,
                 0);
-            activeSenderApp.Start(Seconds(1.0));
-            activeSenderApp.Stop(Seconds(flowEndTime));
         }
     }
 
@@ -715,9 +732,8 @@ main(int argc, char* argv[])
                 backupPort + i,
                 backupSenders.Get(i),
                 backupRate,
+                flowEndTime,
                 0);
-            backupSenderApp.Start(Seconds(1.0));
-            backupSenderApp.Stop(Seconds(flowEndTime));
         }
     }
 
@@ -748,7 +764,7 @@ main(int argc, char* argv[])
     std::string cwndPath = getPath(resultsPath, "cwnd");
     std::filesystem::create_directories(cwndPath);
 
-    for (int i = 0; i < llFlows; i++)
+    for (uint32_t i = 0; i < llFlows; i++)
     {
         std::string path = getPath(cwndPath, "ll-sender-" + std::to_string(i) + "-cwnd.data");
         Simulator::Schedule(Seconds(2), &TraceCwnd, path, llSenders.Get(i)->GetId());
