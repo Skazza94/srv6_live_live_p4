@@ -103,19 +103,25 @@ createOnOffUdpApplication(Ipv6Address addressToReach,
                           Ptr<Node> node,
                           std::string data_rate,
                           uint32_t flowEndTime,
-                          uint32_t max_bytes)
+                          uint32_t max_bytes,
+                          bool generateRandom)
 {
     OnOffHelper onoff("ns3::UdpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
     onoff.SetConstantRate(DataRate(data_rate), 512);
     //    onoff.SetAttribute("DataRate", StringValue(data_rate));
     onoff.SetAttribute("MaxBytes", UintegerValue(max_bytes));
-//    onoff.SetAttribute("PacketSize", UintegerValue(1500));
+    //    onoff.SetAttribute("PacketSize", UintegerValue(1500));
 
     ApplicationContainer senderApp = onoff.Install(node);
 
-    double startTime = distribution(randomGen);
-    std::uniform_real_distribution endDistribution(startTime + 0.3, (double)flowEndTime);
-    double endTime = endDistribution(randomGen);
+    double startTime = 0.0;
+    double endTime = flowEndTime;
+    if (generateRandom)
+    {
+        startTime = distribution(randomGen);
+        std::uniform_real_distribution endDistribution(startTime + 0.3, (double)flowEndTime);
+        endTime = endDistribution(randomGen);
+    }
     NS_LOG_INFO("UDP Application: " + std::to_string(startTime) + " - " + std::to_string(endTime));
     senderApp.Start(Seconds(startTime));
     senderApp.Stop(Seconds(endTime));
@@ -240,6 +246,54 @@ TraceCwnd(std::string fileName, uint32_t nodeId)
                     MakeCallback(&CwndTracer));
 }
 
+std::map<std::string, std::pair<uint64_t, uint64_t>> ctx2tpInfo;
+std::map<std::string, Ptr<OutputStreamWrapper>> tpStream;
+Time period = Time::FromInteger(500, Time::Unit::MS);
+
+void
+trackePktReceivedNetDevice(std::string context, Ptr<const Packet> p)
+{
+    uint64_t lastTs = Simulator::Now().GetNanoSeconds();
+    uint32_t pktSize = p->GetSize() * 8;
+
+    auto ctxIt = ctx2tpInfo.find(context);
+    if (ctxIt == ctx2tpInfo.end())
+    {
+        /* First entry for the context, store the current time and the first size in bits */
+        ctx2tpInfo.insert(std::make_pair(context, std::make_pair(lastTs, pktSize)));
+    }
+    else
+    {
+        /* An entry already exists, check if we have reached the interval */
+        Time interval(lastTs - (*ctxIt).second.first);
+        (*ctxIt).second.second += pktSize;
+        if (interval.Compare(period) >= 0)
+        {
+            /* Yes, compute the bps and store it */
+            double bps = (*ctxIt).second.second * (1000000 / interval.GetMicroSeconds());
+            *tpStream[context]->GetStream() << std::fixed;
+            *tpStream[context]->GetStream()
+                << std::setprecision(2) << Simulator::Now().GetSeconds() << " " << bps << std::endl;
+            /* Delete this entry so it can restart for the next period */
+            ctx2tpInfo.erase(ctxIt);
+        }
+    }
+}
+
+void
+startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
+{
+    std::string nsString = "/NodeList/" + std::to_string(nodeId) + "/DeviceList/" +
+                           std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacTx";
+
+    AsciiTraceHelper ascii;
+    auto it = tpStream.find(nsString);
+    if (it == tpStream.end())
+        tpStream[nsString] = ascii.CreateFileStream(fileName);
+
+    Config::Connect(nsString, MakeCallback(&trackePktReceivedNetDevice));
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -262,6 +316,7 @@ main(int argc, char* argv[])
     std::string defaultBuffer = "1000p";
     std::string activeBuffer = "1000p";
     std::string backupBuffer = "1000p";
+    bool generateRandom = false;
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
@@ -284,6 +339,7 @@ main(int argc, char* argv[])
     cmd.AddValue("default-buffer", "The size of the default buffers", defaultBuffer);
     cmd.AddValue("active-buffer", "The size of the active buffers", activeBuffer);
     cmd.AddValue("backup-buffer", "The size of the backup buffers", backupBuffer);
+    cmd.AddValue("random", "Select whether UDP flows are randomly distributed.", generateRandom);
     cmd.AddValue("seed", "The seed used for the simulation", SEED);
     cmd.AddValue("dump", "Dump traffic during the simulation", dumpTraffic);
     cmd.AddValue("verbose", "Verbose output", verbose);
@@ -699,7 +755,8 @@ main(int argc, char* argv[])
                 activeSenders.Get(i),
                 activeRate,
                 flowEndTime,
-                0);
+                0,
+                generateRandom);
         }
     }
 
@@ -733,7 +790,8 @@ main(int argc, char* argv[])
                 backupSenders.Get(i),
                 backupRate,
                 flowEndTime,
-                0);
+                0,
+                generateRandom);
         }
     }
 
@@ -757,6 +815,20 @@ main(int argc, char* argv[])
             llSenderApp.Stop(Seconds(flowEndTime));
         }
     }
+
+    /* Add Bandwidth monitor only on the interface 0 of c1 and c2 */
+    std::string tpPath = getPath(resultsPath, "throughput");
+    std::filesystem::create_directories(tpPath);
+    Simulator::Schedule(Seconds(0),
+                        &startThroughputTrace,
+                        getPath(tpPath, "e1-0-tp.data"),
+                        e1->GetId(),
+                        llFlows + activeFlows + backupFlows);
+    Simulator::Schedule(Seconds(0),
+                        &startThroughputTrace,
+                        getPath(tpPath, "e1-1-tp.data"),
+                        e1->GetId(),
+                        llFlows + activeFlows + backupFlows + 1);
 
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;

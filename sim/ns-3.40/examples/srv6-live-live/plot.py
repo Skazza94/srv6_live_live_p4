@@ -18,7 +18,7 @@ def parse_cwnd_data(file_path):
     for line in lines:
         line = line.strip().split(" ")
         parsed_result['x'].append(float(line[0]))
-        parsed_result['y'].append(int(line[1]))
+        parsed_result['y'].append(float(line[1]))
 
     return parsed_result
 
@@ -50,11 +50,38 @@ def plot_cwnd_figure(results):
     plt.xlabel('Time (s)')
     plt.ylabel('CWND Size')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
-    experiment_name = "-".join(results.split("/")[-5:])
+    experiment_name = "-".join(results.split("/")[-7:])
     plt.savefig(
         os.path.join(figures_path, f"cwnd_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
     )
 
+
+def plot_throughput_figure(results):
+    cwnd_results_path = os.path.join(results, "throughput")
+
+    def plot_throughput_line(node_type, color, errorbar_color, marker, label):
+        for file_name in os.listdir(cwnd_results_path):
+            if node_type not in file_name:
+                continue
+            to_plot = parse_cwnd_data(os.path.join(cwnd_results_path, file_name))
+            
+            plt.plot(to_plot['x'], [y / 1000000 for y in to_plot['y']], label=file_name.replace(".data", ""), 
+                     linestyle="dashed", fillstyle='none', color=color, marker=marker)
+            break
+            
+    plt.clf()
+    plot_throughput_line("e1-0", 'blue', "darkblue", None, "E1-0")
+    plot_throughput_line("e1-1", 'green', "darkgreen", None, "E1-1")
+
+    # plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+    plt.xlabel('Time [s]')
+    plt.ylabel('Throughput [Mbps]')
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
+    experiment_name = "-".join(results.split("/")[-7:])
+    plt.savefig(
+        os.path.join(figures_path, f"tp_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
+    )
 
 # def plot_fct_figure(results):
 #     flow_results_path = os.path.join(results, "flows_results.json")
@@ -116,7 +143,7 @@ def plot_seqn_figure(results):
     plt.xlabel('Time (s)')
     plt.ylabel('Sequence Number')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
-    experiment_name = "-".join(results.split("/")[-5:])
+    experiment_name = "-".join(results.split("/")[-7:])
     plt.savefig(
         os.path.join(figures_path, f"seqn_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
     )
@@ -141,4 +168,5 @@ if __name__ == '__main__':
 
     plot_seqn_figure(results_path)
     plot_cwnd_figure(results_path)
+    plot_throughput_figure(results_path)
     # plot_fct_figure(results_path)
