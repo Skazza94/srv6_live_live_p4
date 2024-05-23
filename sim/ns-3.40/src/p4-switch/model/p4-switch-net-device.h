@@ -78,7 +78,7 @@ class P4SwitchNetDevice : public NetDevice
     std::string GetPipelineCommands() const;
     void SetPipelineCommands(std::string pipeline_commands);
 
-    P4Pipeline* GetPipeline();
+    std::string RunPipelineCommands(std::string commands);
 
     // inherited from NetDevice base class.
     void SetIfIndex(const uint32_t index) override;

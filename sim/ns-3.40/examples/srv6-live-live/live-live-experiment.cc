@@ -430,9 +430,9 @@ tracePktRxNetDevice(std::string context, Ptr<const Packet> p)
 }
 
 std::string
-runP4CommandAndGetHandle(P4Pipeline* pipeline, std::string command)
+runP4CommandAndGetHandle(P4SwitchNetDevice* p4Switch, std::string command)
 {
-    std::string output = pipeline->run_cli_commands(command);
+    std::string output = p4Switch->RunPipelineCommands(command);
 
     StringVector lines = SplitString(output, "\n");
     for (auto line : lines)
@@ -454,7 +454,6 @@ enableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
 
     Ptr<NetDevice> e1Device = e1->GetDevice(e1->GetNDevices() - 1);
     P4SwitchNetDevice* e1P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e1Device)));
-    P4Pipeline* e1Pipeline = e1P4Switch->GetPipeline();
 
     std::pair key(srcAddr, dstAddr);
     auto it = flow2Handles.find(key);
@@ -462,7 +461,7 @@ enableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
     {
         std::ostringstream spreaderCommand;
         spreaderCommand << "table_delete check_live_live_enabled " << (*it).second << std::endl;
-        std::string out = e1Pipeline->run_cli_commands(spreaderCommand.str());
+        std::string out = e1P4Switch->RunPipelineCommands(spreaderCommand.str());
 
         flow2Handles.erase(it);
     }
@@ -470,7 +469,7 @@ enableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
     std::ostringstream spreaderCommand;
     spreaderCommand << "table_add check_live_live_enabled live_live_mcast " << srcAddr
                     << "/128 => 1 e1::2 " << std::endl;
-    std::string e1Handle = runP4CommandAndGetHandle(e1Pipeline, spreaderCommand.str());
+    std::string e1Handle = runP4CommandAndGetHandle(e1P4Switch, spreaderCommand.str());
 
     flow2Handles.insert(std::make_pair(key, e1Handle));
 }
@@ -482,7 +481,6 @@ disableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
 
     Ptr<NetDevice> e1Device = e1->GetDevice(e1->GetNDevices() - 1);
     P4SwitchNetDevice* e1P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e1Device)));
-    P4Pipeline* e1Pipeline = e1P4Switch->GetPipeline();
 
     std::pair key(srcAddr, dstAddr);
     auto it = flow2Handles.find(key);
@@ -490,7 +488,7 @@ disableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
     {
         std::ostringstream spreaderCommand;
         spreaderCommand << "table_delete check_live_live_enabled " << (*it).second << std::endl;
-        std::string out = e1Pipeline->run_cli_commands(spreaderCommand.str());
+        std::string out = e1P4Switch->RunPipelineCommands(spreaderCommand.str());
 
         flow2Handles.erase(it);
     }
@@ -509,11 +507,9 @@ changeFlowRoute(std::string ctx,
 
     Ptr<NetDevice> e1Device = e1->GetDevice(e1->GetNDevices() - 1);
     P4SwitchNetDevice* e1P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e1Device)));
-    P4Pipeline* e1Pipeline = e1P4Switch->GetPipeline();
 
     Ptr<NetDevice> e2Device = e2->GetDevice(e2->GetNDevices() - 1);
     P4SwitchNetDevice* e2P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e2Device)));
-    P4Pipeline* e2Pipeline = e2P4Switch->GetPipeline();
 
     std::pair e1Key(srcAddr, dstAddr);
     auto e1It = flow2Handles.find(e1Key);
@@ -521,7 +517,7 @@ changeFlowRoute(std::string ctx,
     {
         std::ostringstream spreaderCommand;
         spreaderCommand << "table_delete check_live_live_enabled " << (*e1It).second << std::endl;
-        std::string out = e1Pipeline->run_cli_commands(spreaderCommand.str());
+        std::string out = e1P4Switch->RunPipelineCommands(spreaderCommand.str());
 
         flow2Handles.erase(e1It);
     }
@@ -532,7 +528,7 @@ changeFlowRoute(std::string ctx,
     {
         std::ostringstream despreaderCommand;
         despreaderCommand << "table_delete check_live_live_enabled " << (*e2It).second << std::endl;
-        e2Pipeline->run_cli_commands(despreaderCommand.str());
+        e2P4Switch->RunPipelineCommands(despreaderCommand.str());
 
         flow2Handles.erase(e2It);
     }
@@ -540,13 +536,13 @@ changeFlowRoute(std::string ctx,
     std::ostringstream spreaderCommand;
     spreaderCommand << "table_add check_live_live_enabled ipv6_encap_forward_port " << srcAddr
                     << "/128 => e1::2 " << startingPort + port << std::endl;
-    std::string e1Handle = runP4CommandAndGetHandle(e1Pipeline, spreaderCommand.str());
+    std::string e1Handle = runP4CommandAndGetHandle(e1P4Switch, spreaderCommand.str());
     flow2Handles.insert(std::make_pair(e1Key, e1Handle));
 
     std::ostringstream despreaderCommand;
     despreaderCommand << "table_add check_live_live_enabled ipv6_encap_forward_port " << dstAddr
                       << "/128 => e2::2 " << port << std::endl;
-    std::string e2Handle = runP4CommandAndGetHandle(e2Pipeline, despreaderCommand.str());
+    std::string e2Handle = runP4CommandAndGetHandle(e2P4Switch, despreaderCommand.str());
     flow2Handles.insert(std::make_pair(e2Key, e2Handle));
 }
 
@@ -684,7 +680,7 @@ main(int argc, char* argv[])
     std::string backupBandwidth = "50Kbps";
     std::string backupDelay = "0us";
     std::string backupRate = "50Kbps";
-    std::string congestionControl = "ns3::TcpLinuxReno";
+    std::string congestionControl = "TcpLinuxReno";
     float flowEndTime = 11.0f;
     float endTime = 20.0f;
     bool dumpTraffic = false;

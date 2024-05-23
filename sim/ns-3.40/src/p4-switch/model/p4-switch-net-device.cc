@@ -86,7 +86,6 @@ P4SwitchNetDevice::P4SwitchNetDevice()
 P4SwitchNetDevice::~P4SwitchNetDevice()
 {
     NS_LOG_FUNCTION_NOARGS();
-    delete m_p4_pipeline;
 }
 
 void
@@ -216,10 +215,10 @@ P4SwitchNetDevice::InitPipeline()
     }
 }
 
-P4Pipeline*
-P4SwitchNetDevice::GetPipeline()
+std::string
+P4SwitchNetDevice::RunPipelineCommands(std::string commands)
 {
-    return m_p4_pipeline;
+    return m_p4_pipeline->run_cli_commands(commands);
 }
 
 void
