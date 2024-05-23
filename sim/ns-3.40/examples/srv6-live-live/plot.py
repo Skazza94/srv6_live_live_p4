@@ -85,9 +85,11 @@ def plot_throughput_figure(results):
         to_plot_filtered = {}
         for t, vals in to_plot_type.items():
             if single_file:
-                to_plot_filtered[t] = sum(vals)
-            else:
                to_plot_filtered[t] = sum(vals)
+            else:
+                print(len(vals), expected_vals)
+                if len(vals) == expected_vals:
+                    to_plot_filtered[t] = sum(vals)
         plt.plot(to_plot_filtered.keys(), [y / 1000000 for y in to_plot_filtered.values()], label=label, 
                     linestyle="dashed", fillstyle='none', color=color, marker=marker)
             
@@ -95,8 +97,12 @@ def plot_throughput_figure(results):
     plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live", True)
     # plot_throughput_line("active-fg", 'green', "darkgreen", None, "Active", True)
     # plot_throughput_line("backup-fg", 'gold', "darkred", None, "Backup", True)
-    plot_throughput_line("active", 'orange', "darkgreen", None, "Active", False)
-    plot_throughput_line("backup", 'red', "darkred", None, "Backup", False)
+    if is_random:
+        plot_throughput_line("active", 'orange', "darkgreen", None, "Active", True)
+        plot_throughput_line("backup", 'red', "darkred", None, "Backup", True)
+    else:
+        plot_throughput_line("active", 'orange', "darkgreen", None, "Active", False, n_active_flows)
+        plot_throughput_line("backup", 'red', "darkred", None, "Backup", False, n_backup_flows)
     # plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", False, n_backup_flows - 1)
 
     plt.ylim(bottom=0)
@@ -174,14 +180,14 @@ def plot_seqn_figure(results):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 2:
         print(
-            "Usage: plot.py <results_path> <figures_path>"
+            "Usage: plot.py <results_path>"
         )
         exit(1)
     
     results_path = os.path.abspath(sys.argv[1])
-    figures_path = os.path.abspath(sys.argv[2])
+    figures_path = os.path.abspath("figures")
 
     print(f"Results Path: {results_path}")
     print(f"Figures Path: {figures_path}")
