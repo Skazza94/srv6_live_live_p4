@@ -60,9 +60,10 @@ def plot_cwnd_figure(results):
 
 def plot_throughput_figure(results):
     params = results.split('/')[-7:]
-    (_, n_active_flows, n_backup_flows) = params[0].split('-')
+    (_, n_active_flows, n_backup_flows, exp_type) = params[0].split('-')
     n_active_flows = int(n_active_flows)
     n_backup_flows = int(n_backup_flows)
+    is_random = exp_type == "r"
 
     cwnd_results_path = os.path.join(results, "throughput")
 
@@ -85,7 +86,7 @@ def plot_throughput_figure(results):
         to_plot_filtered = {}
         for t, vals in to_plot_type.items():
             if single_file:
-                to_plot_filtered[t] = vals[0]
+                to_plot_filtered[t] = sum(vals)
             else:
                 if len(vals) == expected_vals:
                     to_plot_filtered[t] = sum(vals)
@@ -95,10 +96,16 @@ def plot_throughput_figure(results):
             
     plt.clf()
     plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live", True)
-    plot_throughput_line("active-bg", 'orange', "darkgreen", None, "Active BG", False, n_active_flows - 1)
-    plot_throughput_line("active-fg", 'green', "darkgreen", None, "Active", True)
-    plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", False, n_backup_flows - 1)
-    plot_throughput_line("backup-fg", 'gold', "darkred", None, "Backup", True)
+    if is_random:
+        plot_throughput_line("active-bg", 'orange', "darkgreen", None, "Active BG", True)
+    else:
+        plot_throughput_line("active-bg", 'orange', "darkgreen", None, "Active BG", False, n_active_flows - 1)
+    # plot_throughput_line("active-fg", 'green', "darkgreen", None, "Active", True)
+    if is_random:
+        plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", True)
+    else:
+        plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", False, n_backup_flows - 1)
+    # plot_throughput_line("backup-fg", 'gold', "darkred", None, "Backup", True)
 
     plt.ylim(bottom=0)
     plt.xlabel('Time [s]')
