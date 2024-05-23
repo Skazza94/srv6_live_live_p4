@@ -823,21 +823,39 @@ main(int argc, char* argv[])
                             llReceivers.Get(i)->GetId(),
                             0);
     }
-    for (uint32_t i = 0; i < activeFlows; i++)
+    if (activeFlows > 0)
     {
         Simulator::Schedule(Seconds(0),
                             &startThroughputTrace,
-                            getPath(tpPath, "active-" + std::to_string(i) + "-tp.data"),
-                            activeReceivers.Get(i)->GetId(),
+                            getPath(tpPath, "active-fg-" + std::to_string(0) + "-tp.data"),
+                            activeReceivers.Get(0)->GetId(),
                             0);
+
+        for (uint32_t i = 1; i < activeFlows; i++)
+        {
+            Simulator::Schedule(Seconds(0),
+                                &startThroughputTrace,
+                                getPath(tpPath, "active-bg-" + std::to_string(i) + "-tp.data"),
+                                activeReceivers.Get(i)->GetId(),
+                                0);
+        }
     }
-    for (uint32_t i = 0; i < backupFlows; i++)
+    if (backupFlows > 0)
     {
         Simulator::Schedule(Seconds(0),
                             &startThroughputTrace,
-                            getPath(tpPath, "backup-" + std::to_string(i) + "-tp.data"),
-                            backupReceivers.Get(i)->GetId(),
+                            getPath(tpPath, "backup-fg-" + std::to_string(0) + "-tp.data"),
+                            backupReceivers.Get(0)->GetId(),
                             0);
+
+        for (uint32_t i = 1; i < backupFlows; i++)
+        {
+            Simulator::Schedule(Seconds(0),
+                                &startThroughputTrace,
+                                getPath(tpPath, "backup-bg-" + std::to_string(i) + "-tp.data"),
+                                backupReceivers.Get(i)->GetId(),
+                                0);
+        }
     }
 
     NS_LOG_INFO("Configure Tracing.");

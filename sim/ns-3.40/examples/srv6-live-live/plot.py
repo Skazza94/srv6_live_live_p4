@@ -95,8 +95,10 @@ def plot_throughput_figure(results):
             
     plt.clf()
     plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live", True)
-    plot_throughput_line("active", 'green', "darkgreen", None, "Active", False, n_active_flows)
-    plot_throughput_line("backup", 'red', "darkred", None, "Backup", False, n_backup_flows)
+    plot_throughput_line("active-bg", 'orange', "darkgreen", None, "Active BG", False, n_active_flows - 1)
+    plot_throughput_line("active-fg", 'green', "darkgreen", None, "Active", True)
+    plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", False, n_backup_flows - 1)
+    plot_throughput_line("backup-fg", 'gold', "darkred", None, "Backup", True)
 
     plt.ylim(bottom=0)
     plt.xlabel('Time [s]')
