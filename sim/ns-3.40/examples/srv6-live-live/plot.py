@@ -7,6 +7,8 @@ from datetime import datetime
 
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+from itertools import islice
 from sortedcontainers import SortedDict
 
 figures_path = "figures"
@@ -65,45 +67,58 @@ def plot_throughput_figure(results):
     n_backup_flows = int(n_backup_flows)
     is_random = exp_type == "r"
 
+    def closest(sorted_dict, key):
+        assert len(sorted_dict) > 0
+        keys = list(islice(sorted_dict.irange(minimum=key), 1))
+        keys.extend(islice(sorted_dict.irange(maximum=key, reverse=True), 1))
+        return min(keys, key=lambda k: abs(key - k))
+
     cwnd_results_path = os.path.join(results, "throughput")
 
-    def plot_throughput_line(node_type, color, errorbar_color, marker, label, single_file, expected_vals=0):
-        to_plot_type = SortedDict()
-
+    def plot_throughput_line(node_type, color, errorbar_color, marker, label):
         for file_name in os.listdir(cwnd_results_path):
             if node_type not in file_name:
                 continue
             
             to_plot = parse_data_file(os.path.join(cwnd_results_path, file_name))
 
-            for idx, t in enumerate(to_plot['x']):
-                r_t = round(t, 1) if not single_file else t
+        plt.plot(to_plot['x'], [y / 1000000 for y in to_plot['y']], label=label, 
+                linestyle="dashed", fillstyle='none', color=color, marker=marker)
 
-                if r_t not in to_plot_type:
-                    to_plot_type[r_t] = []
-                to_plot_type[r_t].append(to_plot['y'][idx])
+    def plot_throughput_line_merge(node_type, color, errorbar_color, marker, label):
+        to_plot_type = SortedDict({round(x, 1): [] for x in np.arange(0, 10.1, 0.5)})
+
+        for file_name in os.listdir(cwnd_results_path):
+            if node_type not in file_name:
+                continue
+            
+            to_plot_file = SortedDict({round(x, 1): 0 for x in np.arange(0, 10.1, 0.5)})
+            to_plot = parse_data_file(os.path.join(cwnd_results_path, file_name))
+
+            for idx, t in enumerate(to_plot['x']):
+                r_t = closest(to_plot_file, round(t, 1))
+
+                if to_plot_file[r_t] == 0:
+                    to_plot_file[r_t] = to_plot['y'][idx]
+                else:
+                    to_plot_file[r_t] = (to_plot_file[r_t] + to_plot['y'][idx]) / 2
+            
+            for t, val in to_plot_file.items():
+                to_plot_type[t].append(val)
+
         to_plot_filtered = {}
         for t, vals in to_plot_type.items():
-            if single_file:
-               to_plot_filtered[t] = sum(vals)
-            else:
-                print(len(vals), expected_vals)
-                if len(vals) == expected_vals:
-                    to_plot_filtered[t] = sum(vals)
+            to_plot_filtered[t] = sum(vals)
+            
         plt.plot(to_plot_filtered.keys(), [y / 1000000 for y in to_plot_filtered.values()], label=label, 
                     linestyle="dashed", fillstyle='none', color=color, marker=marker)
             
     plt.clf()
-    plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live", True)
-    # plot_throughput_line("active-fg", 'green', "darkgreen", None, "Active", True)
-    # plot_throughput_line("backup-fg", 'gold', "darkred", None, "Backup", True)
-    if is_random:
-        plot_throughput_line("active", 'orange', "darkgreen", None, "Active", True)
-        plot_throughput_line("backup", 'red', "darkred", None, "Backup", True)
-    else:
-        plot_throughput_line("active", 'orange', "darkgreen", None, "Active", False, n_active_flows)
-        plot_throughput_line("backup", 'red', "darkred", None, "Backup", False, n_backup_flows)
-    # plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", False, n_backup_flows - 1)
+    plt.yscale("log")
+
+    plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live")
+    plot_throughput_line_merge("active", 'orange', "darkgreen", None, "Active")
+    plot_throughput_line_merge("backup", 'red', "darkred", None, "Backup")
 
     plt.ylim(bottom=0)
     plt.xlabel('Time [s]')
