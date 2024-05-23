@@ -82,30 +82,22 @@ def plot_throughput_figure(results):
                 if r_t not in to_plot_type:
                     to_plot_type[r_t] = []
                 to_plot_type[r_t].append(to_plot['y'][idx])
-
         to_plot_filtered = {}
         for t, vals in to_plot_type.items():
             if single_file:
                 to_plot_filtered[t] = sum(vals)
             else:
-                if len(vals) == expected_vals:
-                    to_plot_filtered[t] = sum(vals)
-            
+               to_plot_filtered[t] = sum(vals)
         plt.plot(to_plot_filtered.keys(), [y / 1000000 for y in to_plot_filtered.values()], label=label, 
                     linestyle="dashed", fillstyle='none', color=color, marker=marker)
             
     plt.clf()
     plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live", True)
-    if is_random:
-        plot_throughput_line("active-bg", 'orange', "darkgreen", None, "Active BG", True)
-    else:
-        plot_throughput_line("active-bg", 'orange', "darkgreen", None, "Active BG", False, n_active_flows - 1)
     # plot_throughput_line("active-fg", 'green', "darkgreen", None, "Active", True)
-    if is_random:
-        plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", True)
-    else:
-        plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", False, n_backup_flows - 1)
     # plot_throughput_line("backup-fg", 'gold', "darkred", None, "Backup", True)
+    plot_throughput_line("active", 'orange', "darkgreen", None, "Active", False)
+    plot_throughput_line("backup", 'red', "darkred", None, "Backup", False)
+    # plot_throughput_line("backup-bg", 'red', "darkred", None, "Backup BG", False, n_backup_flows - 1)
 
     plt.ylim(bottom=0)
     plt.xlabel('Time [s]')

@@ -752,6 +752,9 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Flow End Time: " + std::to_string(flowEndTime));
     NS_LOG_INFO("End Time: " + std::to_string(endTime));
 
+    NS_LOG_INFO("Configuring Congestion Control.");
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
+
     std::filesystem::create_directories(resultsPath);
 
     randomGen = std::mt19937(seed);
@@ -894,7 +897,7 @@ main(int argc, char* argv[])
     internetV6only.Install(activeReceivers);
     internetV6only.Install(backupReceivers);
     internetV6only.Install(llReceivers);
-
+    
     Ipv6AddressHelper llSenderIpv6Helper;
     llSenderIpv6Helper.SetBase(Ipv6Address("2001::"), Ipv6Prefix(64));
     llSenderIpv6Helper.Assign(llSenderInterfaces);
@@ -1117,9 +1120,6 @@ main(int argc, char* argv[])
     forwardHelper.Install(c1, c1Interfaces);
     forwardHelper.Install(c2, c2Interfaces);
 
-    NS_LOG_INFO("Configuring Congestion Control.");
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
-
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
     uint16_t activePort = 20000;
@@ -1269,7 +1269,7 @@ main(int argc, char* argv[])
 
         for (uint32_t i = 1; i < activeFlows; i++)
         {
-            Simulator::Schedule(Seconds(0),
+            Simulator::Schedule(Seconds(0.1),
                                 &startThroughputTrace,
                                 getPath(tpPath, "active-bg-" + std::to_string(i) + "-tp.data"),
                                 activeReceivers.Get(i)->GetId(),
@@ -1286,7 +1286,7 @@ main(int argc, char* argv[])
 
         for (uint32_t i = 1; i < backupFlows; i++)
         {
-            Simulator::Schedule(Seconds(0),
+            Simulator::Schedule(Seconds(0.1),
                                 &startThroughputTrace,
                                 getPath(tpPath, "backup-bg-" + std::to_string(i) + "-tp.data"),
                                 backupReceivers.Get(i)->GetId(),
@@ -1310,19 +1310,19 @@ main(int argc, char* argv[])
     for (uint32_t i = 0; i < llFlows; i++)
     {
         std::string path = getPath(cwndPath, "ll-sender-" + std::to_string(i) + "-cwnd.data");
-        Simulator::Schedule(Seconds(2), &TraceCwnd, path, llSenders.Get(i)->GetId());
+        Simulator::Schedule(Seconds(1.1), &TraceCwnd, path, llSenders.Get(i)->GetId());
     }
 
     if (activeFlows > 0 && !sdWan)
     {
         std::string path = getPath(cwndPath, "active-sender-0-cwnd.data");
-        Simulator::Schedule(Seconds(2), &TraceCwnd, path, activeSenders.Get(0)->GetId());
+        Simulator::Schedule(Seconds(1.1), &TraceCwnd, path, activeSenders.Get(0)->GetId());
     }
 
     if (backupFlows > 0)
     {
         std::string path = getPath(cwndPath, "backup-sender-0-cwnd.data");
-        Simulator::Schedule(Seconds(2), &TraceCwnd, path, backupSenders.Get(0)->GetId());
+        Simulator::Schedule(Seconds(1.1), &TraceCwnd, path, backupSenders.Get(0)->GetId());
     }
 
     if (dumpTraffic)
