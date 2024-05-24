@@ -87,7 +87,7 @@ class Flow(object):
     #  class variable list
     __slots_ = ['flowId', 'delayMean', 'packetLossRatio', 'rxBitrate', 'txBitrate',
                 'fiveTuple', 'packetSizeMean', 'probe_stats_unsorted',
-                'hopCount', 'flowInterruptionsHistogram', 'rx_duration', 'fct']
+                'hopCount', 'flowInterruptionsHistogram', 'delayHistogram', 'rx_duration', 'fct']
     def __init__(self, flow_el):
         '''! The initializer.
         @param self The object pointer.
@@ -132,6 +132,12 @@ class Flow(object):
             self.flowInterruptionsHistogram = None
         else:
             self.flowInterruptionsHistogram = Histogram(interrupt_hist_elem)
+
+        flow_delay_hist = flow_el.find("delayHistogram")
+        if flow_delay_hist:
+            self.delayHistogram = flow_delay_hist
+        else:
+            self.delayHistogram = None
 
 ## ProbeFlowStats
 class ProbeFlowStats(object):
@@ -180,7 +186,7 @@ class Simulation(object):
                 flow_map[flowId].probe_stats_unsorted.append(s)
 
 
-def main(path):
+def parse_xml(path):
     with open(path, encoding="utf-8") as file_obj:
         print("Reading XML file ", end=" ")
 
@@ -200,7 +206,10 @@ def main(path):
                     sys.stdout.write(".")
                     sys.stdout.flush()
     print(" done.")
+    return sim_list
 
+def main(path):
+    sim_list = parse_xml(path)
     if len(sim_list) > 1: 
         raise Exception("Two simulations in one single flow monitor file.")
     

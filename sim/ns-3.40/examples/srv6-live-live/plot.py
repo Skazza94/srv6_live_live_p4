@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from itertools import islice
 from sortedcontainers import SortedDict
+from flowmon_parser import parse_xml, FiveTuple, Flow, Simulation
+import matplotlib.patches as mpatches
 
 figures_path = "figures"
 
@@ -85,14 +87,14 @@ def plot_throughput_figure(results):
         plt.plot(to_plot['x'], [y / 1000000 for y in to_plot['y']], label=label, 
                 linestyle="dashed", fillstyle='none', color=color, marker=marker)
 
-    def plot_throughput_line_merge(node_type, color, errorbar_color, marker, label):
-        to_plot_type = SortedDict({round(x, 1): [] for x in np.arange(0, 10.1, 0.5)})
+    def plot_throughput_line_merge(node_type, color, errorbar_color, marker, label, experiment_time):
+        to_plot_type = SortedDict({round(x, 1): [] for x in np.arange(0, experiment_time, 0.5)})
 
         for file_name in os.listdir(cwnd_results_path):
             if node_type not in file_name:
                 continue
             
-            to_plot_file = SortedDict({round(x, 1): 0 for x in np.arange(0, 10.1, 0.5)})
+            to_plot_file = SortedDict({round(x, 1): 0 for x in np.arange(0, experiment_time, 0.5)})
             to_plot = parse_data_file(os.path.join(cwnd_results_path, file_name))
 
             for idx, t in enumerate(to_plot['x']):
@@ -114,13 +116,15 @@ def plot_throughput_figure(results):
                     linestyle="dashed", fillstyle='none', color=color, marker=marker)
             
     plt.clf()
-    plt.yscale("log")
+    # plt.yscale("log")
 
     plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live")
-    plot_throughput_line_merge("active", 'orange', "darkgreen", None, "Active")
-    plot_throughput_line_merge("backup", 'red', "darkred", None, "Backup")
+    plot_throughput_line("active-fg", 'orange', "darkgreen", None, "Active-TCP")
+    plot_throughput_line("backup-fg", 'red', "darkred", None, "Backup-TCP")
+    plot_throughput_line_merge("active-bg", 'purple', "darkgreen", None, "Active", 15)
+    plot_throughput_line_merge("backup-bg", 'green', "darkred", None, "Backup", 15)
 
-    plt.ylim(bottom=0)
+    # plt.ylim(bottom=0)
     plt.xlabel('Time [s]')
     plt.ylabel('Throughput [Mbps]')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
@@ -177,6 +181,7 @@ def plot_seqn_figure(results):
                 seqn = int(line[9])
                 to_plot['x'].append(ts - starting_ts)
                 to_plot['y'].append(seqn)
+        print(ll_port, len(to_plot['y']))
         plt.plot(to_plot['x'], to_plot['y'], label=label, linestyle="dashed", fillstyle='none', color=color,
                  marker=marker)
 
@@ -194,15 +199,53 @@ def plot_seqn_figure(results):
     )
 
 
+def plot_delay_histogram_figure(results, addresses):
+    flow_monitor_path = os.path.join(results, "flow-monitor", "flow_monitor.xml")
+    sim : Simulation = parse_xml(flow_monitor_path)[0]
+    def plot_delay_histogram(axes, src_addr, label, color):
+        to_plot = []
+        packets_count = 0
+        for flow in sim.flows:
+            flow: Flow = flow
+            t: FiveTuple = flow.fiveTuple
+            if t.sourceAddress == src_addr:
+                for bin in flow.delayHistogram:
+                    # print(bin.get("start"), bin.get("count"), [float(bin.get("start"))]*int(bin.get("count")))
+                    to_plot.extend([float(bin.get("start"))*1000]*int(bin.get("count")))
+                    packets_count += int(bin.get("count"))
+                axes.hist(to_plot, label=label, color=color)
+                axes.set_xlabel('Delay (ms)')
+                axes.set_xlim([0, 500])
+                axes.set_ylabel('Count')
+                print(label, packets_count)
+        
+    plt.clf()
+    
+    fig, axs = plt.subplots(1, len(addresses), sharey=True, tight_layout=True)
+    handles = []
+    for ax_n, (address, label, color) in enumerate(addresses):
+        plot_delay_histogram(axs[ax_n], address, label, color)
+        handles.append(mpatches.Patch(color=color, label=label))
+    plt.xlabel('Delay (ms)')
+    plt.ylabel('Count')
+
+    fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5,1.1), ncol=len(handles))
+   
+    experiment_name = "-".join(results.split("/")[-7:])
+    plt.savefig(
+        os.path.join(figures_path, f"delay_histogram_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
+    )
+   
+
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         print(
             "Usage: plot.py <results_path>"
         )
         exit(1)
     
     results_path = os.path.abspath(sys.argv[1])
-    figures_path = os.path.abspath("figures")
+    figures_path = os.path.abspath(sys.argv[2])
 
     print(f"Results Path: {results_path}")
     print(f"Figures Path: {figures_path}")
@@ -214,4 +257,7 @@ if __name__ == '__main__':
     plot_seqn_figure(results_path)
     plot_cwnd_figure(results_path)
     plot_throughput_figure(results_path)
+    plot_delay_histogram_figure(
+        results_path, 
+        [("2001::1", "live-live", "red"), ("2003::1", "active", "green"), ("2005::1", "backup", "blue")])
     # plot_fct_figure(results_path)
