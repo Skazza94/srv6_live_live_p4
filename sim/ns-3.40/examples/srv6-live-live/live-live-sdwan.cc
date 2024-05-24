@@ -34,8 +34,6 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE("LiveLiveExample");
 
 bool verbose = false;
-std::string SDWAN_LATENCY_CHECK_INTERVAL = "100ms";
-Time SDWAN_TARGET_LATENCY("5ms");
 
 uint32_t seed = 10;
 std::mt19937 randomGen;
@@ -90,9 +88,7 @@ createTcpApplication(Ipv6Address addressToReach,
 {
     OnOffHelper source("ns3::TcpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
     source.SetConstantRate(DataRate(dataRate), 1400);
-    // source.SetAttribute("DataRate", StringValue(dataRate));
     source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
-    // source.SetAttribute("SendSize", UintegerValue(1400));
 
     return source.Install(node);
 }
@@ -294,11 +290,35 @@ startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
 }
 
 /* SDWAN Functions */
+std::string SDWAN_LATENCY_CHECK_INTERVAL = "100ms";
+Time SDWAN_TARGET_LATENCY;
+std::string sdWanMode = "latency";
+
 void checkLatency(Ipv6Address srcAddr,
                   Ipv6Address dstAddr,
                   Ptr<Node> e1,
                   Ptr<Node> e2,
                   uint32_t startingPort);
+
+void checkLiveLiveLatency(Ipv6Address srcAddr,
+                          Ipv6Address dstAddr,
+                          Ptr<Node> e1,
+                          Ptr<Node> e2,
+                          uint32_t startingPort);
+
+void tcpRx(Ipv6Address srcAddr,
+           Ipv6Address dstAddr,
+           Ptr<Node> e1,
+           Ptr<Node> e2,
+           uint32_t startingPort,
+           std::string context,
+           const Ptr<const Packet> p,
+           const TcpHeader& hdr,
+           const Ptr<const TcpSocketBase> skt);
+
+void enableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr);
+
+void disableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr);
 
 bool llChecking = false;
 std::map<std::pair<Ipv6Address, Ipv6Address>, int64_t>* flowPrevTs =
@@ -317,6 +337,7 @@ Ipv6Prefix dstPrefix("2002::", 64);
 
 std::map<std::pair<Ipv6Address, Ipv6Address>, std::string> flow2Handles;
 
+/* Callback for SD-WAN Latency Mode */
 void
 tracePktRxNetDevice(std::string context, Ptr<const Packet> p)
 {
@@ -429,6 +450,20 @@ tracePktRxNetDevice(std::string context, Ptr<const Packet> p)
     }
 }
 
+/* Callback for SD-WAN TCP Mode */
+void
+startTcpRx(uint32_t nodeId,
+           Ipv6Address srcAddr,
+           Ipv6Address dstAddr,
+           Ptr<Node> e1,
+           Ptr<Node> e2,
+           uint32_t startingPort)
+{
+    Config::Connect("/NodeList/" + std::to_string(nodeId) + "/$ns3::TcpL4Protocol/SocketList/1/Rx",
+                    MakeBoundCallback(&tcpRx, srcAddr, dstAddr, e1, e2, startingPort));
+}
+
+/* Generic Functions */
 std::string
 runP4CommandAndGetHandle(P4SwitchNetDevice* p4Switch, std::string command)
 {
@@ -447,6 +482,110 @@ runP4CommandAndGetHandle(P4SwitchNetDevice* p4Switch, std::string command)
     return "";
 }
 
+void
+changeFlowRoute(uint32_t port,
+                Ptr<Node> e1,
+                Ptr<Node> e2,
+                Ipv6Address srcAddr,
+                Ipv6Address dstAddr,
+                uint32_t startingPort)
+{
+    Ptr<NetDevice> e1Device = e1->GetDevice(e1->GetNDevices() - 1);
+    P4SwitchNetDevice* e1P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e1Device)));
+
+    Ptr<NetDevice> e2Device = e2->GetDevice(e2->GetNDevices() - 1);
+    P4SwitchNetDevice* e2P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e2Device)));
+
+    std::pair e1Key(srcAddr, dstAddr);
+    auto e1It = flow2Handles.find(e1Key);
+    if (e1It != flow2Handles.end())
+    {
+        std::ostringstream spreaderCommand;
+        spreaderCommand << "table_delete check_live_live_enabled " << (*e1It).second << std::endl;
+        std::string out = e1P4Switch->RunPipelineCommands(spreaderCommand.str());
+
+        flow2Handles.erase(e1It);
+    }
+
+    std::pair e2Key(dstAddr, srcAddr);
+    auto e2It = flow2Handles.find(e2Key);
+    if (e2It != flow2Handles.end())
+    {
+        std::ostringstream despreaderCommand;
+        despreaderCommand << "table_delete check_live_live_enabled " << (*e2It).second << std::endl;
+        e2P4Switch->RunPipelineCommands(despreaderCommand.str());
+
+        flow2Handles.erase(e2It);
+    }
+
+    std::ostringstream spreaderCommand;
+    spreaderCommand << "table_add check_live_live_enabled ipv6_encap_forward_port " << srcAddr
+                    << "/128 => e1::2 " << startingPort + port << std::endl;
+    std::string e1Handle = runP4CommandAndGetHandle(e1P4Switch, spreaderCommand.str());
+    flow2Handles.insert(std::make_pair(e1Key, e1Handle));
+
+    std::ostringstream despreaderCommand;
+    despreaderCommand << "table_add check_live_live_enabled ipv6_encap_forward_port " << dstAddr
+                      << "/128 => e2::2 " << port << std::endl;
+    std::string e2Handle = runP4CommandAndGetHandle(e2P4Switch, despreaderCommand.str());
+    flow2Handles.insert(std::make_pair(e2Key, e2Handle));
+}
+
+void
+checkLatency(Ipv6Address srcAddr,
+             Ipv6Address dstAddr,
+             Ptr<Node> e1,
+             Ptr<Node> e2,
+             uint32_t startingPort)
+{
+    bool reschedule = true;
+
+    std::pair key(srcAddr, dstAddr);
+
+    auto it = flowLatencies->find(key);
+    if (it != flowLatencies->end())
+    {
+        if (!(*it).second.empty())
+        {
+            double sum = std::accumulate((*it).second.begin(), (*it).second.end(), 0.0);
+            Time avg(sum / (*it).second.size());
+
+            std::cout << "ll-latency-ts=" << Simulator::Now().GetSeconds()
+                      << " ll-latency=" << avg.GetMicroSeconds() << std::endl;
+
+            if (sdWanMode == "latency" && avg.Compare(SDWAN_TARGET_LATENCY) >= 0)
+            {
+                std::cout << "ll-sdwan-enabled=" << Simulator::Now().GetSeconds() << std::endl;
+
+                Simulator::Schedule(Seconds(1),
+                                    &checkLiveLiveLatency,
+                                    srcAddr,
+                                    dstAddr,
+                                    e1,
+                                    e2,
+                                    startingPort);
+                enableLiveLive(e1, srcAddr, dstAddr);
+                reschedule = false;
+            }
+        }
+
+        (*it).second.clear();
+        flowPrevTs->erase(key);
+    }
+
+    if (reschedule)
+    {
+        Simulator::Schedule(Time(SDWAN_LATENCY_CHECK_INTERVAL),
+                            &checkLatency,
+                            srcAddr,
+                            dstAddr,
+                            e1,
+                            e2,
+                            startingPort);
+    }
+}
+
+/* Functions for Latency Mode */
 void
 enableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
 {
@@ -494,59 +633,6 @@ disableLiveLive(Ptr<Node> e1, Ipv6Address srcAddr, Ipv6Address dstAddr)
     }
 }
 
-void
-changeFlowRoute(std::string ctx,
-                Ptr<Node> e1,
-                Ptr<Node> e2,
-                Ipv6Address srcAddr,
-                Ipv6Address dstAddr,
-                uint32_t startingPort)
-{
-    StringVector parts = SplitString(ctx, "/");
-    int port = std::stoi(parts[4]) + 1;
-
-    Ptr<NetDevice> e1Device = e1->GetDevice(e1->GetNDevices() - 1);
-    P4SwitchNetDevice* e1P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e1Device)));
-
-    Ptr<NetDevice> e2Device = e2->GetDevice(e2->GetNDevices() - 1);
-    P4SwitchNetDevice* e2P4Switch = dynamic_cast<P4SwitchNetDevice*>(&(*(e2Device)));
-
-    std::pair e1Key(srcAddr, dstAddr);
-    auto e1It = flow2Handles.find(e1Key);
-    if (e1It != flow2Handles.end())
-    {
-        std::ostringstream spreaderCommand;
-        spreaderCommand << "table_delete check_live_live_enabled " << (*e1It).second << std::endl;
-        std::string out = e1P4Switch->RunPipelineCommands(spreaderCommand.str());
-
-        flow2Handles.erase(e1It);
-    }
-
-    std::pair e2Key(dstAddr, srcAddr);
-    auto e2It = flow2Handles.find(e2Key);
-    if (e2It != flow2Handles.end())
-    {
-        std::ostringstream despreaderCommand;
-        despreaderCommand << "table_delete check_live_live_enabled " << (*e2It).second << std::endl;
-        e2P4Switch->RunPipelineCommands(despreaderCommand.str());
-
-        flow2Handles.erase(e2It);
-    }
-
-    std::ostringstream spreaderCommand;
-    spreaderCommand << "table_add check_live_live_enabled ipv6_encap_forward_port " << srcAddr
-                    << "/128 => e1::2 " << startingPort + port << std::endl;
-    std::string e1Handle = runP4CommandAndGetHandle(e1P4Switch, spreaderCommand.str());
-    flow2Handles.insert(std::make_pair(e1Key, e1Handle));
-
-    std::ostringstream despreaderCommand;
-    despreaderCommand << "table_add check_live_live_enabled ipv6_encap_forward_port " << dstAddr
-                      << "/128 => e2::2 " << port << std::endl;
-    std::string e2Handle = runP4CommandAndGetHandle(e2P4Switch, despreaderCommand.str());
-    flow2Handles.insert(std::make_pair(e2Key, e2Handle));
-}
-
-/* Callback to check Live-Live flows latencies on each port and select the best path */
 void
 checkLiveLiveLatency(Ipv6Address srcAddr,
                      Ipv6Address dstAddr,
@@ -597,7 +683,9 @@ checkLiveLiveLatency(Ipv6Address srcAddr,
             NS_LOG_INFO("Getting best latency of " << minLatency << " on ctx " << minCtx);
         }
 
-        changeFlowRoute(minCtx, e1, e2, srcAddr, dstAddr, startingPort);
+        StringVector parts = SplitString(minCtx, "/");
+        uint32_t port = std::stoi(parts[4]) + 1;
+        changeFlowRoute(port, e1, e2, srcAddr, dstAddr, startingPort);
     }
     Simulator::Schedule(Time(SDWAN_LATENCY_CHECK_INTERVAL),
                         &checkLatency,
@@ -608,60 +696,39 @@ checkLiveLiveLatency(Ipv6Address srcAddr,
                         startingPort);
 }
 
-/* Callback to check latencies after each interval */
+/* Functions for TCP Mode */
+SequenceNumber32 prevSeqno(0);
+uint32_t oooPkts = 0;
+uint32_t N_RETRANSMISSIONS_THRESHOLD = 34;
+
 void
-checkLatency(Ipv6Address srcAddr,
-             Ipv6Address dstAddr,
-             Ptr<Node> e1,
-             Ptr<Node> e2,
-             uint32_t startingPort)
+tcpRx(Ipv6Address srcAddr,
+      Ipv6Address dstAddr,
+      Ptr<Node> e1,
+      Ptr<Node> e2,
+      uint32_t startingPort,
+      std::string context,
+      const Ptr<const Packet> p,
+      const TcpHeader& hdr,
+      const Ptr<const TcpSocketBase> skt)
 {
-    bool reschedule = true;
+    SequenceNumber32 currSeqno = hdr.GetSequenceNumber();
 
-    std::pair key(srcAddr, dstAddr);
-
-    auto it = flowLatencies->find(key);
-    if (it != flowLatencies->end())
+    if (currSeqno <= prevSeqno)
     {
-        if (!(*it).second.empty())
+        oooPkts++;
+        if (oooPkts >= N_RETRANSMISSIONS_THRESHOLD)
         {
-            double sum = std::accumulate((*it).second.begin(), (*it).second.end(), 0.0);
-            Time avg(sum / (*it).second.size());
+            std::cout << "ll-sdwan-enabled=" << Simulator::Now().GetSeconds() << std::endl;
 
-            if (verbose)
-            {
-                NS_LOG_INFO(Simulator::Now().GetMilliSeconds() << " ms " << avg);
-            }
+            changeFlowRoute(2, e1, e2, srcAddr, dstAddr, startingPort);
 
-            if (avg.Compare(SDWAN_TARGET_LATENCY) >= 0)
-            {
-                NS_LOG_INFO("ll-enabled=" << Simulator::Now().GetSeconds());
-
-                Simulator::Schedule(Seconds(1),
-                                    &checkLiveLiveLatency,
-                                    srcAddr,
-                                    dstAddr,
-                                    e1,
-                                    e2,
-                                    startingPort);
-                enableLiveLive(e1, srcAddr, dstAddr);
-                reschedule = false;
-            }
+            oooPkts = 0;
         }
-
-        (*it).second.clear();
-        flowPrevTs->erase(key);
     }
-
-    if (reschedule)
+    else
     {
-        Simulator::Schedule(Time(SDWAN_LATENCY_CHECK_INTERVAL),
-                            &checkLatency,
-                            srcAddr,
-                            dstAddr,
-                            e1,
-                            e2,
-                            startingPort);
+        prevSeqno = currSeqno;
     }
 }
 
@@ -683,16 +750,14 @@ main(int argc, char* argv[])
     std::string congestionControl = "TcpLinuxReno";
     float flowEndTime = 11.0f;
     float endTime = 20.0f;
-    bool dumpTraffic = false;
-    std::string defaultBuffer = "1000p";
     std::string activeBuffer = "1000p";
     std::string backupBuffer = "1000p";
-    bool generateRandom = false;
-    bool sdWan = false;
+    std::string sdWanTargetDelay = "1.5ms";
+
+    bool dumpTraffic = false;
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
-    cmd.AddValue("ll-flows", "The number of concurrent live-live flows to generate", llFlows);
     cmd.AddValue("active-flows", "The number of concurrent flows on the active path", activeFlows);
     cmd.AddValue("backup-flows", "The number of concurrent flows on the backup path", backupFlows);
     cmd.AddValue("default-bw",
@@ -708,14 +773,13 @@ main(int argc, char* argv[])
     cmd.AddValue("congestion-control", "The congestion control to use", congestionControl);
     cmd.AddValue("flow-end", "Flows End Time", flowEndTime);
     cmd.AddValue("end", "Simulation End Time", endTime);
-    cmd.AddValue("default-buffer", "The size of the default buffers", defaultBuffer);
     cmd.AddValue("active-buffer", "The size of the active buffers", activeBuffer);
     cmd.AddValue("backup-buffer", "The size of the backup buffers", backupBuffer);
-    cmd.AddValue("random", "Select whether UDP flows are randomly distributed.", generateRandom);
     cmd.AddValue("seed", "The seed used for the simulation", seed);
-    cmd.AddValue("sdwan", "Enables the SD-WAN use case", sdWan);
+    cmd.AddValue("sdwan-mode", "The mode to use (latency/tcp)", sdWanMode);
+    cmd.AddValue("sdwan-target-delay", "The target delay of the sensitive flow", sdWanTargetDelay);
     cmd.AddValue("dump", "Dump traffic during the simulation", dumpTraffic);
-    cmd.AddValue("verbose ", " Verbose output ", verbose);
+    cmd.AddValue("verbose", "Verbose output ", verbose);
 
     cmd.Parse(argc, argv);
 
@@ -741,12 +805,25 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Backup Flows Rate: " + backupRate);
     NS_LOG_INFO("Active Path Delay: " + activeDelay);
     NS_LOG_INFO("Backup Path Delay: " + backupDelay);
-    NS_LOG_INFO("Default Buffer Size: " + defaultBuffer);
     NS_LOG_INFO("Active Buffer Size: " + activeBuffer);
     NS_LOG_INFO("Backup Buffer Size: " + backupBuffer);
     NS_LOG_INFO("TCP Congestion Control: " + congestionControl);
     NS_LOG_INFO("Flow End Time: " + std::to_string(flowEndTime));
     NS_LOG_INFO("End Time: " + std::to_string(endTime));
+    NS_LOG_INFO("Seed: " + std::to_string(seed));
+
+    if (sdWanMode != "latency" && sdWanMode != "tcp")
+    {
+        NS_LOG_ERROR("Unknown SD-WAN Mode: `" << sdWanMode << "`!");
+        return 1;
+    }
+    NS_LOG_INFO("SD-WAN Experiment Mode: " + sdWanMode);
+
+    if (sdWanMode == "latency")
+    {
+        NS_LOG_INFO("Sensitive Flow Latency: " + sdWanTargetDelay);
+        SDWAN_TARGET_LATENCY = Time(sdWanTargetDelay);
+    }
 
     NS_LOG_INFO("Configuring Congestion Control.");
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
@@ -795,7 +872,6 @@ main(int argc, char* argv[])
     CsmaHelper csma;
     csma.SetChannelAttribute("DataRate", StringValue(defaultBandwidth));
     csma.SetDeviceAttribute("Mtu", UintegerValue(1500));
-    // csma.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(defaultBuffer));
 
     CsmaHelper csmaActive;
     csmaActive.SetChannelAttribute("DataRate", StringValue(activeBandwidth));
@@ -893,7 +969,7 @@ main(int argc, char* argv[])
     internetV6only.Install(activeReceivers);
     internetV6only.Install(backupReceivers);
     internetV6only.Install(llReceivers);
-    
+
     Ipv6AddressHelper llSenderIpv6Helper;
     llSenderIpv6Helper.SetBase(Ipv6Address("2001::"), Ipv6Prefix(64));
     llSenderIpv6Helper.Assign(llSenderInterfaces);
@@ -982,12 +1058,6 @@ main(int argc, char* argv[])
                          << llFlows + activeFlows + backupFlows + 1 << " "
                          << llFlows + activeFlows + backupFlows + 2 << "\nmc_node_associate 1 0"
                          << std::endl;
-    if (!sdWan)
-    {
-        spreaderPortsCommand
-            << "table_add check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2"
-            << std::endl;
-    }
     spreaderPortsCommand << "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55"
                          << std::endl;
 
@@ -1024,12 +1094,9 @@ main(int argc, char* argv[])
     spreaderPortsCommand
         << "table_set_default check_live_live_enabled ipv6_encap_forward_random e1::2 1 "
         << llFlows + activeFlows + backupFlows + 1 << std::endl;
-    if (sdWan)
-    {
-        spreaderPortsCommand
-            << "table_add check_live_live_enabled ipv6_encap_forward_port 2001::/64 => e1::2 "
-            << llFlows + activeFlows + backupFlows + 1 << std::endl;
-    }
+    spreaderPortsCommand
+        << "table_add check_live_live_enabled ipv6_encap_forward_port 2001::/64 => e1::2 "
+        << llFlows + activeFlows + backupFlows + 1 << std::endl;
     spreaderPortsCommand
         << "table_add check_live_live_enabled ipv6_encap_forward_port 2003::/64 => e1::2 "
         << llFlows + activeFlows + backupFlows + 1 << std::endl;
@@ -1074,23 +1141,16 @@ main(int argc, char* argv[])
                                << std::endl;
     }
 
-    std::string e2Commands = "mc_mgrp_create 1\nmc_node_create 1 1 2\nmc_node_associate 1 0\n"
-                             "table_add srv6_function srv6_ll_deduplicate 85 => \n";
-    if (!sdWan)
-    {
-        e2Commands += "table_add check_live_live_enabled live_live_mcast 2002::/64 => 1 e2::2\n";
-    }
-    else
-    {
-        e2Commands +=
-            "table_add check_live_live_enabled ipv6_encap_forward_port 2002::/64 => e2::2 1\n";
-    }
-    e2Commands += "table_add check_live_live_enabled ipv6_encap_forward_port 2004::/64 => e2::2 1\n"
-                  "table_add check_live_live_enabled ipv6_encap_forward_port 2006::/64 => e2::2 2\n"
-                  "table_add srv6_forward add_srv6_dest_segment 1 => e1::2\n"
-                  "table_add srv6_forward add_srv6_dest_segment 2 => e1::2\n"
-                  "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55\n" +
-                  despreaderPortsCommand.str();
+    std::string e2Commands =
+        "mc_mgrp_create 1\nmc_node_create 1 1 2\nmc_node_associate 1 0\n"
+        "table_add srv6_function srv6_ll_deduplicate 85 => \n"
+        "table_add check_live_live_enabled ipv6_encap_forward_port 2002::/64 => e2::2 1\n"
+        "table_add check_live_live_enabled ipv6_encap_forward_port 2004::/64 => e2::2 1\n"
+        "table_add check_live_live_enabled ipv6_encap_forward_port 2006::/64 => e2::2 2\n"
+        "table_add srv6_forward add_srv6_dest_segment 1 => e1::2\n"
+        "table_add srv6_forward add_srv6_dest_segment 2 => e1::2\n"
+        "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55\n" +
+        despreaderPortsCommand.str();
     liveliveHelper.SetDeviceAttribute("PipelineCommands", StringValue(e2Commands));
     liveliveHelper.Install(e2, e2Interfaces);
 
@@ -1121,61 +1181,24 @@ main(int argc, char* argv[])
     uint16_t activePort = 20000;
     if (activeFlows > 0)
     {
-        if (!sdWan)
+        for (uint32_t i = 0; i < activeFlows; i++)
         {
+            bool isMoreThanHalf = ((i + 1) / (float)activeFlows) >= 0.5;
+
             ApplicationContainer activeReceiverApp =
-                createSinkTcpApplication(activePort, activeReceivers.Get(0));
-            activeReceiverApp.Start(Seconds(0.0));
+                createSinkUdpApplication(activePort + i, activeReceivers.Get(i));
+            activeReceiverApp.Start(Seconds(!isMoreThanHalf ? 0.0 : 3.0));
             activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
             ApplicationContainer activeSenderApp =
-                createTcpApplication(activeReceiverIpv6Interfaces[0]->GetAddress(2).GetAddress(),
-                                     activePort,
-                                     activeSenders.Get(0),
+                createUdpApplication(activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
+                                     activePort + i,
+                                     activeSenders.Get(i),
                                      activeRate,
-                                     0);
-            activeSenderApp.Start(Seconds(1.0));
-            activeSenderApp.Stop(Seconds(flowEndTime));
-
-            for (uint32_t i = 1; i < activeFlows; i++)
-            {
-                activeReceiverApp =
-                    createSinkUdpApplication(activePort + i, activeReceivers.Get(i));
-                activeReceiverApp.Start(Seconds(0.0));
-                activeReceiverApp.Stop(Seconds(flowEndTime + 1));
-
-                activeSenderApp = createUdpApplication(
-                    activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
-                    activePort + i,
-                    activeSenders.Get(i),
-                    activeRate,
-                    1.0,
-                    flowEndTime,
-                    0,
-                    generateRandom);
-            }
-        }
-        else
-        {
-            for (uint32_t i = 0; i < activeFlows; i++)
-            {
-                bool isMoreThanHalf = ((i + 1) / (float)activeFlows) >= 0.5;
-
-                ApplicationContainer activeReceiverApp =
-                    createSinkUdpApplication(activePort + i, activeReceivers.Get(i));
-                activeReceiverApp.Start(Seconds(!isMoreThanHalf ? 0.0 : 3.0));
-                activeReceiverApp.Stop(Seconds(flowEndTime + 1));
-
-                ApplicationContainer activeSenderApp = createUdpApplication(
-                    activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
-                    activePort + i,
-                    activeSenders.Get(i),
-                    activeRate,
-                    !isMoreThanHalf ? 1.0 : 4.0,
-                    flowEndTime,
-                    0,
-                    false);
-            }
+                                     !isMoreThanHalf ? 1.0 : 4.0,
+                                     flowEndTime,
+                                     0,
+                                     false);
         }
     }
 
@@ -1183,27 +1206,14 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Create Backup Flow Applications.");
     if (backupFlows > 0)
     {
-        ApplicationContainer backupReceiverApp =
-            createSinkTcpApplication(backupPort, backupReceivers.Get(0));
-        backupReceiverApp.Start(Seconds(0.0));
-        backupReceiverApp.Stop(Seconds(flowEndTime + 1));
-
-        ApplicationContainer backupSenderApp =
-            createTcpApplication(backupReceiverIpv6Interfaces[0]->GetAddress(2).GetAddress(),
-                                 backupPort,
-                                 backupSenders.Get(0),
-                                 backupRate,
-                                 0);
-        backupSenderApp.Start(Seconds(1.0));
-        backupSenderApp.Stop(Seconds(flowEndTime));
-
-        for (uint32_t i = 1; i < backupFlows; i++)
+        for (uint32_t i = 0; i < backupFlows; i++)
         {
-            backupReceiverApp = createSinkUdpApplication(backupPort + i, backupReceivers.Get(i));
-            backupReceiverApp.Start(Seconds(0.0));
-            backupReceiverApp.Stop(Seconds(flowEndTime + 1));
+            ApplicationContainer activeReceiverApp =
+                createSinkUdpApplication(backupPort + i, backupReceivers.Get(i));
+            activeReceiverApp.Start(Seconds(0.0));
+            activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-            backupSenderApp =
+            ApplicationContainer backupSenderApp =
                 createUdpApplication(backupReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
                                      backupPort + i,
                                      backupSenders.Get(i),
@@ -1211,7 +1221,7 @@ main(int argc, char* argv[])
                                      1.0,
                                      flowEndTime,
                                      0,
-                                     generateRandom);
+                                     false);
         }
     }
 
@@ -1232,15 +1242,27 @@ main(int argc, char* argv[])
             llSenderApp.Start(Seconds(1.0));
             llSenderApp.Stop(Seconds(flowEndTime));
 
-            if (sdWan)
+            Simulator::Schedule(Time(SDWAN_LATENCY_CHECK_INTERVAL),
+                                &checkLatency,
+                                srcAddr,
+                                dstAddr,
+                                e1,
+                                e2,
+                                llFlows + activeFlows + backupFlows);
+
+            if (sdWanMode == "tcp")
             {
-                Simulator::Schedule(Time(SDWAN_LATENCY_CHECK_INTERVAL),
-                                    &checkLatency,
-                                    srcAddr,
-                                    dstAddr,
-                                    e1,
-                                    e2,
-                                    llFlows + activeFlows + backupFlows);
+                for (uint32_t i = 0; i < llFlows; i++)
+                {
+                    Simulator::Schedule(Seconds(1.1),
+                                        &startTcpRx,
+                                        llReceivers.Get(i)->GetId(),
+                                        srcAddr,
+                                        dstAddr,
+                                        e1,
+                                        e2,
+                                        llFlows + activeFlows + backupFlows);
+                }
             }
         }
     }
@@ -1290,12 +1312,9 @@ main(int argc, char* argv[])
         }
     }
 
-    if (sdWan)
-    {
-        std::string nsString = "/NodeList/" + std::to_string(e2->GetId()) +
-                               "/DeviceList/*/$ns3::CsmaNetDevice/MacPromiscRx";
-        Config::Connect(nsString, MakeCallback(&tracePktRxNetDevice));
-    }
+    Config::Connect("/NodeList/" + std::to_string(e2->GetId()) +
+                        "/DeviceList/*/$ns3::CsmaNetDevice/MacPromiscRx",
+                    MakeCallback(&tracePktRxNetDevice));
 
     NS_LOG_INFO("Configure Tracing.");
     AsciiTraceHelper ascii;
@@ -1307,18 +1326,6 @@ main(int argc, char* argv[])
     {
         std::string path = getPath(cwndPath, "ll-sender-" + std::to_string(i) + "-cwnd.data");
         Simulator::Schedule(Seconds(1.1), &TraceCwnd, path, llSenders.Get(i)->GetId());
-    }
-
-    if (activeFlows > 0 && !sdWan)
-    {
-        std::string path = getPath(cwndPath, "active-sender-0-cwnd.data");
-        Simulator::Schedule(Seconds(1.1), &TraceCwnd, path, activeSenders.Get(0)->GetId());
-    }
-
-    if (backupFlows > 0)
-    {
-        std::string path = getPath(cwndPath, "backup-sender-0-cwnd.data");
-        Simulator::Schedule(Seconds(1.1), &TraceCwnd, path, backupSenders.Get(0)->GetId());
     }
 
     if (dumpTraffic)
