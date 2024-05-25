@@ -291,7 +291,6 @@ startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
     Config::Connect(nsString, MakeCallback(&tracePktTxNetDevice));
 }
 
-
 int
 main(int argc, char* argv[])
 {
@@ -317,7 +316,9 @@ main(int argc, char* argv[])
     std::string activeBuffer = "1000p";
     std::string backupBuffer = "1000p";
     bool generateRandom = false;
-    bool incremental = false;
+    bool alternate = false;
+    uint32_t maxBytes = 15000000;
+
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
@@ -328,6 +329,7 @@ main(int argc, char* argv[])
                  "The bandwidth to set on all the sender/receiver links",
                  defaultBandwidth);
     cmd.AddValue("ll-rate", "The TCP rate to set to the live-live flows", llRate);
+    cmd.AddValue("max-bytes", "Bytes to send from TCP applications", maxBytes);
     cmd.AddValue("active-bw", "The bandwidth to set on the active path", activeBandwidth);
     cmd.AddValue("active-delay", "The delay to set on the active path", activeDelay);
     cmd.AddValue("active-rate-tcp", "The TCP rate to set to the active flows", activeRateTcp);
@@ -344,9 +346,9 @@ main(int argc, char* argv[])
     cmd.AddValue("backup-buffer", "The size of the backup buffers", backupBuffer);
     cmd.AddValue("random", "Select whether UDP flows are randomly distributed.", generateRandom);
     cmd.AddValue("seed", "The seed used for the simulation", seed);
-    cmd.AddValue("incremental", "Enables the SD-WAN use case", incremental);
+    cmd.AddValue("alternate", "Enables the SD-WAN use case", alternate);
     cmd.AddValue("dump", "Dump traffic during the simulation", dumpTraffic);
-    cmd.AddValue("verbose ", " Verbose output ", verbose);
+    cmd.AddValue("verbose", "Verbose output", verbose);
 
     cmd.Parse(argc, argv);
 
@@ -370,6 +372,7 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Live-Live TCP Rate: " + llRate);
     NS_LOG_INFO("Active TCP Flows Rate: " + activeRateTcp);
     NS_LOG_INFO("Backup TCP Flows Rate: " + backupRateTcp);
+    NS_LOG_INFO("TCP Bytes to Send: " + std::to_string(maxBytes));
     NS_LOG_INFO("Active UDP Flows Rate: " + activeRateUdp);
     NS_LOG_INFO("Backup UDP Flows Rate: " + backupRateUdp);
     NS_LOG_INFO("Active Path Delay: " + activeDelay);
@@ -483,7 +486,7 @@ main(int argc, char* argv[])
     c1Interfaces.Add(link.Get(1));
 
     link = csmaBackup.Install(NodeContainer(e1, c2));
-    e1Interfaces.Add(link.Get(0));
+    e1Interfaces.Add(link.Get(0)); 
     c2Interfaces.Add(link.Get(1));
 
     link = csma.Install(NodeContainer(c1, e2));
@@ -526,7 +529,7 @@ main(int argc, char* argv[])
     internetV6only.Install(activeReceivers);
     internetV6only.Install(backupReceivers);
     internetV6only.Install(llReceivers);
-    
+
     Ipv6AddressHelper llSenderIpv6Helper;
     llSenderIpv6Helper.SetBase(Ipv6Address("2001::"), Ipv6Prefix(64));
     llSenderIpv6Helper.Assign(llSenderInterfaces);
@@ -615,11 +618,10 @@ main(int argc, char* argv[])
                          << llFlows + activeFlows + backupFlows + 1 << " "
                          << llFlows + activeFlows + backupFlows + 2 << "\nmc_node_associate 1 0"
                          << std::endl;
-   
-    spreaderPortsCommand
-        << "table_add check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2"
-        << std::endl;
-    
+
+    spreaderPortsCommand << "table_add check_live_live_enabled live_live_mcast 2001::/64 => 1 e1::2"
+                         << std::endl;
+
     spreaderPortsCommand << "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55"
                          << std::endl;
 
@@ -702,9 +704,9 @@ main(int argc, char* argv[])
 
     std::string e2Commands = "mc_mgrp_create 1\nmc_node_create 1 1 2\nmc_node_associate 1 0\n"
                              "table_add srv6_function srv6_ll_deduplicate 85 => \n";
-  
+
     e2Commands += "table_add check_live_live_enabled live_live_mcast 2002::/64 => 1 e2::2\n";
-    
+
     e2Commands += "table_add check_live_live_enabled ipv6_encap_forward_port 2004::/64 => e2::2 1\n"
                   "table_add check_live_live_enabled ipv6_encap_forward_port 2006::/64 => e2::2 2\n"
                   "table_add srv6_forward add_srv6_dest_segment 1 => e1::2\n"
@@ -741,20 +743,20 @@ main(int argc, char* argv[])
     uint16_t activePort = 20000;
     if (activeFlows > 0)
     {
-         ApplicationContainer activeReceiverApp =
-                createSinkTcpApplication(activePort, activeReceivers.Get(0));
-            activeReceiverApp.Start(Seconds(0.0));
-            activeReceiverApp.Stop(Seconds(flowEndTime + 1));
+        ApplicationContainer activeReceiverApp =
+            createSinkTcpApplication(activePort, activeReceivers.Get(0));
+        activeReceiverApp.Start(Seconds(0.0));
+        activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-            ApplicationContainer activeSenderApp =
-                createTcpApplication(activeReceiverIpv6Interfaces[0]->GetAddress(2).GetAddress(),
-                                     activePort,
-                                     activeSenders.Get(0),
-                                     activeRateTcp,
-                                     12500000);
-            activeSenderApp.Start(Seconds(1.0));
-            // activeSenderApp.Stop(Seconds(flowEndTime));
-        if (!incremental)
+        ApplicationContainer activeSenderApp =
+            createTcpApplication(activeReceiverIpv6Interfaces[0]->GetAddress(2).GetAddress(),
+                                 activePort,
+                                 activeSenders.Get(0),
+                                 activeRateTcp,
+                                 maxBytes);
+        activeSenderApp.Start(Seconds(1.0));
+        // activeSenderApp.Stop(Seconds(flowEndTime));
+        if (!alternate)
         {
             for (uint32_t i = 1; i < activeFlows; i++)
             {
@@ -781,19 +783,19 @@ main(int argc, char* argv[])
                 bool isMoreThanHalf = ((i + 1) / (float)activeFlows) >= 0.5;
 
                 ApplicationContainer activeReceiverApp =
-                    createSinkUdpApplication(activePort + i, activeReceivers.Get(i));
-                activeReceiverApp.Start(Seconds(!isMoreThanHalf ? 0.0 : 3.0));
+                createSinkUdpApplication(activePort + i, activeReceivers.Get(i));
+                activeReceiverApp.Start(Seconds(0.0));
                 activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
                 ApplicationContainer activeSenderApp = createUdpApplication(
-                    activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
-                    activePort + i,
-                    activeSenders.Get(i),
-                    activeRateUdp,
-                    !isMoreThanHalf ? 1.0 : 4.0,
-                    !isMoreThanHalf ? 7.5 : flowEndTime,
-                    0,
-                    false);
+                activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
+                activePort + i,
+                activeSenders.Get(i),
+                activeRateUdp,
+                !isMoreThanHalf ? 2.0 : 6.0,
+                !isMoreThanHalf ? 4.0 : 8.0,
+                0,
+                false);
             }
         }
     }
@@ -812,25 +814,50 @@ main(int argc, char* argv[])
                                  backupPort,
                                  backupSenders.Get(0),
                                  backupRateTcp,
-                                 12500000);
+                                 maxBytes);
         backupSenderApp.Start(Seconds(1.0));
         // backupSenderApp.Stop(Seconds(flowEndTime));
-
-        for (uint32_t i = 1; i < backupFlows; i++)
+        if (!alternate)
         {
-            backupReceiverApp = createSinkUdpApplication(backupPort + i, backupReceivers.Get(i));
-            backupReceiverApp.Start(Seconds(0.0));
-            backupReceiverApp.Stop(Seconds(flowEndTime + 1));
+            for (uint32_t i = 1; i < backupFlows; i++)
+            {
+                backupReceiverApp =
+                    createSinkUdpApplication(backupPort + i, backupReceivers.Get(i));
+                backupReceiverApp.Start(Seconds(0.0));
+                backupReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-            backupSenderApp =
-                createUdpApplication(backupReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
-                                     backupPort + i,
-                                     backupSenders.Get(i),
-                                     backupRateUdp,
-                                     1.0,
-                                     flowEndTime,
-                                     0,
-                                     generateRandom);
+                backupSenderApp = createUdpApplication(
+                    backupReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
+                    backupPort + i,
+                    backupSenders.Get(i),
+                    backupRateUdp,
+                    1.0,
+                    flowEndTime,
+                    0,
+                    generateRandom);
+            }
+        }
+        else
+        {
+            for (uint32_t i = 1; i < backupFlows; i++)
+            {
+                bool isMoreThanHalf = ((i + 1) / (float)backupFlows) >= 0.5;
+
+                backupReceiverApp =
+                    createSinkUdpApplication(backupPort + i, backupReceivers.Get(i));
+                backupReceiverApp.Start(Seconds(0.0));
+                backupReceiverApp.Stop(Seconds(flowEndTime + 1));
+
+                backupSenderApp = createUdpApplication(
+                    backupReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
+                    backupPort + i,
+                    backupSenders.Get(i),
+                    backupRateUdp,
+                    !isMoreThanHalf ? 4.0 : 8.0,
+                    !isMoreThanHalf ? 6.0 : 10.0,
+                    0,
+                    generateRandom);
+            }
         }
     }
 
@@ -847,7 +874,7 @@ main(int argc, char* argv[])
             Ipv6Address srcAddr = llSenderIpv6Interfaces[i]->GetAddress(2).GetAddress();
             Ipv6Address dstAddr = llReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress();
             ApplicationContainer llSenderApp =
-                createTcpApplication(dstAddr, llPort + i, llSenders.Get(i), llRate, 12500000);
+                createTcpApplication(dstAddr, llPort + i, llSenders.Get(i), llRate, maxBytes);
             llSenderApp.Start(Seconds(1.0));
             // llSenderApp.Stop(Seconds(flowEndTime));
         }

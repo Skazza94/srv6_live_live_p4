@@ -121,8 +121,8 @@ def plot_throughput_figure(results):
     plot_throughput_line("ll", 'blue', "darkblue", None, "Live-Live")
     plot_throughput_line("active-fg", 'orange', "darkgreen", None, "Active-TCP")
     plot_throughput_line("backup-fg", 'red', "darkred", None, "Backup-TCP")
-    plot_throughput_line_merge("active-bg", 'purple', "darkgreen", None, "Active", 15)
-    plot_throughput_line_merge("backup-bg", 'green', "darkred", None, "Backup", 15)
+    # plot_throughput_line_merge("active-bg", 'purple', "darkgreen", None, "Active", 15)
+    # plot_throughput_line_merge("backup-bg", 'green', "darkred", None, "Backup", 15)
 
     # plt.ylim(bottom=0)
     plt.xlabel('Time [s]')
@@ -213,15 +213,16 @@ def plot_delay_histogram_figure(results, addresses):
                     # print(bin.get("start"), bin.get("count"), [float(bin.get("start"))]*int(bin.get("count")))
                     to_plot.extend([float(bin.get("start"))*1000]*int(bin.get("count")))
                     packets_count += int(bin.get("count"))
-                axes.hist(to_plot, label=label, color=color)
-                axes.set_xlabel('Delay (ms)')
+                axes.hist(to_plot, label=label, color=color, histtype='stepfilled')
+                # axes.set_xlabel('Delay (ms)')
                 axes.set_xlim([0, 500])
                 axes.set_ylabel('Count')
                 print(label, packets_count)
-        
+    
+    
     plt.clf()
     
-    fig, axs = plt.subplots(1, len(addresses), sharey=True, tight_layout=True)
+    fig, axs = plt.subplots(len(addresses), 1, sharey="all", tight_layout=True, figsize=(4, 4))
     handles = []
     for ax_n, (address, label, color) in enumerate(addresses):
         plot_delay_histogram(axs[ax_n], address, label, color)
@@ -234,6 +235,32 @@ def plot_delay_histogram_figure(results, addresses):
     experiment_name = "-".join(results.split("/")[-7:])
     plt.savefig(
         os.path.join(figures_path, f"delay_histogram_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
+    )
+
+
+def plot_fct_histogram_figure(results, addresses):
+    flow_monitor_path = os.path.join(results, "flow-monitor", "flow_monitor.xml")
+    
+    sim : Simulation = parse_xml(flow_monitor_path)[0]
+    labels = []
+    colors = []
+    fcts = []
+    for (address, label, color) in addresses:
+        labels.append(label)
+        colors.append(color)
+        for flow in sim.flows:
+            flow: Flow = flow
+            t: FiveTuple = flow.fiveTuple
+            if t.sourceAddress == address:
+                fcts.append(flow.fct)
+       
+    plt.clf()
+
+    plt.bar(labels, fcts, color=colors)    
+    plt.ylabel('FCT (ms)')   
+    experiment_name = "-".join(results.split("/")[-7:])
+    plt.savefig(
+        os.path.join(figures_path, f"fct_histogram_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
     )
    
 
@@ -257,7 +284,12 @@ if __name__ == '__main__':
     plot_seqn_figure(results_path)
     plot_cwnd_figure(results_path)
     plot_throughput_figure(results_path)
+
+    plot_fct_histogram_figure(
+        results_path, 
+        [("2001::1", "live-live", "red"), ("2003::1", "active", "green"), ("2005::1", "backup", "blue")])
+
     plot_delay_histogram_figure(
         results_path, 
         [("2001::1", "live-live", "red"), ("2003::1", "active", "green"), ("2005::1", "backup", "blue")])
-    # plot_fct_figure(results_path)
+

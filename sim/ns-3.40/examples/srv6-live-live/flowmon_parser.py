@@ -208,67 +208,71 @@ def parse_xml(path):
     print(" done.")
     return sim_list
 
+
+def get_flow_results(sim):
+    results = {
+        'flows': {}
+    } 
+    total_fct = 0
+    fct_list = []
+    for flow in sim.flows:
+        t: FiveTuple = flow.fiveTuple
+        proto = {6: 'TCP', 17: 'UDP'} [t.protocol]
+        print("FlowID: %i (%s %s/%s --> %s/%i)" % \
+            (flow.flowId, proto, t.sourceAddress, t.sourcePort, t.destinationAddress, t.destinationPort))
+        if flow.txBitrate is None:
+            print("\tTX bitrate: None")
+        else:
+            print("\tTX bitrate: %.2f kbit/s" % (flow.txBitrate*1e-3,))
+        if flow.rxBitrate is None:
+            print("\tRX bitrate: None")
+        else:
+            print("\tRX bitrate: %.2f kbit/s" % (flow.rxBitrate*1e-3,))
+        if flow.delayMean is None:
+            print("\tMean Delay: None")
+        else:
+            print("\tMean Delay: %.2f ms" % (flow.delayMean*1e3,))
+        if flow.packetLossRatio is None:
+            print("\tPacket Loss Ratio: None")
+        else:
+            print("\tPacket Loss Ratio: %.2f %%" % (flow.packetLossRatio*100))
+        if flow.fct is None:
+            print("\tFCT: None")
+        else:
+            print(f"\tFCT: {flow.fct}")
+        
+        results['flows'][flow.flowId] = {
+            'src_addr': t.sourceAddress,
+            'dsr_addr': t.destinationAddress,
+            'src_port': t.sourcePort,
+            'dst_port': t.destinationPort,
+            'protocol': t.protocol, 
+            'tx_bit_rate': flow.txBitrate*1e-3, 
+            'rx_bit_rate': flow.rxBitrate*1e-3,
+            'mean_delay': flow.delayMean*1e3,
+            "packet_loss_ratio": flow.packetLossRatio*100,
+            'fct': flow.fct
+        }
+        total_fct += flow.fct
+        fct_list.append(flow.fct)
+    
+    results['number_of_flows'] = len(sim.flows)
+    results['mean_fct'] = total_fct/len(sim.flows)
+    results['99-ile_fct'] = fct_list[int((len(fct_list) * 99) / 100)]
+    results['99.9-ile_fct'] = fct_list[int((len(fct_list) * 999) / 1000)]
+    print(f"Number of Flows: {len(sim.flows)}")
+    print(f"AVG FCT: {total_fct/len(sim.flows)}")
+    print("Flow 99-ile FCT: %.4f s" % (fct_list[int((len(fct_list) * 99) / 100)]))
+    print("Flow 99.9-ile FCT: %.4f s" % (fct_list[int((len(fct_list) * 999) / 1000)]))
+
+    return results
+
 def main(path):
     sim_list = parse_xml(path)
     if len(sim_list) > 1: 
         raise Exception("Two simulations in one single flow monitor file.")
     
-    for sim in sim_list:
-        results = {
-            'flows': {}
-        } 
-        total_fct = 0
-        fct_list = []
-        for flow in sim.flows:
-            t: FiveTuple = flow.fiveTuple
-            proto = {6: 'TCP', 17: 'UDP'} [t.protocol]
-            print("FlowID: %i (%s %s/%s --> %s/%i)" % \
-                (flow.flowId, proto, t.sourceAddress, t.sourcePort, t.destinationAddress, t.destinationPort))
-            if flow.txBitrate is None:
-                print("\tTX bitrate: None")
-            else:
-                print("\tTX bitrate: %.2f kbit/s" % (flow.txBitrate*1e-3,))
-            if flow.rxBitrate is None:
-                print("\tRX bitrate: None")
-            else:
-                print("\tRX bitrate: %.2f kbit/s" % (flow.rxBitrate*1e-3,))
-            if flow.delayMean is None:
-                print("\tMean Delay: None")
-            else:
-                print("\tMean Delay: %.2f ms" % (flow.delayMean*1e3,))
-            if flow.packetLossRatio is None:
-                print("\tPacket Loss Ratio: None")
-            else:
-                print("\tPacket Loss Ratio: %.2f %%" % (flow.packetLossRatio*100))
-            if flow.fct is None:
-                print("\tFCT: None")
-            else:
-                print(f"\tFCT: {flow.fct}")
-            
-            results['flows'][flow.flowId] = {
-                'src_addr': t.sourceAddress,
-                'dsr_addr': t.destinationAddress,
-                'src_port': t.sourcePort,
-                'dst_port': t.destinationPort,
-                'protocol': t.protocol, 
-                'tx_bit_rate': flow.txBitrate*1e-3, 
-                'rx_bit_rate': flow.rxBitrate*1e-3,
-                'mean_delay': flow.delayMean*1e3,
-                "packet_loss_ratio": flow.packetLossRatio*100,
-                'fct': flow.fct
-            }
-            total_fct += flow.fct
-            fct_list.append(flow.fct)
-        
-        results['number_of_flows'] = len(sim.flows)
-        results['mean_fct'] = total_fct/len(sim.flows)
-        results['99-ile_fct'] = fct_list[int((len(fct_list) * 99) / 100)]
-        results['99.9-ile_fct'] = fct_list[int((len(fct_list) * 999) / 1000)]
-        print(f"Number of Flows: {len(sim.flows)}")
-        print(f"AVG FCT: {total_fct/len(sim.flows)}")
-        print("Flow 99-ile FCT: %.4f s" % (fct_list[int((len(fct_list) * 99) / 100)]))
-        print("Flow 99.9-ile FCT: %.4f s" % (fct_list[int((len(fct_list) * 999) / 1000)]))
-
+    results = get_flow_results(sim_list[0])
     result_path = os.path.join("/".join(path.split("/")[:-1]), "flows_results.json")
     with open(result_path, 'w') as result_file: 
         json.dump(results, result_file)

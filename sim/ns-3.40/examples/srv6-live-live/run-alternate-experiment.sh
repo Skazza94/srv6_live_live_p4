@@ -6,24 +6,24 @@ backup_bw="100Mbps"
 ll_rate="5Mbps"
 active_rate_tcp="5Mbps"
 backup_rate_tcp="5Mbps"
-maxBytes=125000000
+maxBytes=7500000
 active_rate_udp="1Mbps"
 backup_rate_udp="1Mbps"
 active_delay="5us"
 backup_delay="5us"
 congestion_control="TcpLinuxReno"
 ll_flows=1
-active_flows=70
-backup_flows=1
+active_flows=191
+backup_flows=191
 default_buffer="10000p"
 active_buffer="10000p"
 backup_buffer="10000p"
 seed=23
-flow_end=11
+flow_end=13
 end=40
 dump=""
 random=""
-alternate=""
+alternate="--alternate"
 
 random_lbl="b"
 if [[ $random != "" ]]
@@ -40,5 +40,3 @@ mkdir -p results/$result_path
 
 python3 flowmon_parser.py results/$result_path/flow-monitor/flow_monitor.xml
 python3 plot.py results/$result_path/ figures/$result_path
-chmod 777 -R results 
-chmod 777 -R figures 
