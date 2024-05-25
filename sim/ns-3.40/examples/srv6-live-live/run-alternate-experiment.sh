@@ -3,10 +3,10 @@
 default_bw="100Mbps"
 active_bw="100Mbps"
 backup_bw="100Mbps"
-ll_rate="5Mbps"
-active_rate_tcp="5Mbps"
-backup_rate_tcp="5Mbps"
-maxBytes=7500000
+ll_rate="10Mbps"
+active_rate_tcp="10Mbps"
+backup_rate_tcp="10Mbps"
+maxBytes=12500000
 active_rate_udp="1Mbps"
 backup_rate_udp="1Mbps"
 active_delay="5us"
