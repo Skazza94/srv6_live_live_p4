@@ -281,7 +281,6 @@ startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
     std::string nsString = "/NodeList/" + std::to_string(nodeId) + "/DeviceList/" +
                            std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacRx";
 
-    AsciiTraceHelper ascii;
     auto it = tpStream.find(nsString);
     if (it == tpStream.end())
         tpStream[nsString] = fopen(fileName.c_str(), "w");

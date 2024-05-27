@@ -283,12 +283,73 @@ startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
     std::string nsString = "/NodeList/" + std::to_string(nodeId) + "/DeviceList/" +
                            std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacRx";
 
-    AsciiTraceHelper ascii;
     auto it = tpStream.find(nsString);
     if (it == tpStream.end())
         tpStream[nsString] = fopen(fileName.c_str(), "w");
 
     Config::Connect(nsString, MakeCallback(&tracePktTxNetDevice));
+}
+
+/* Functions to track TCP Retransmissions */
+std::map<std::string, std::pair<SequenceNumber32, uint32_t>> ctx2rtxInfo;
+std::map<std::string, FILE*> rtxStream;
+Time rtxPeriod = Time::FromInteger(100, Time::Unit::MS);
+
+void
+tcpRx(std::string context,
+      const Ptr<const Packet> p,
+      const TcpHeader& hdr,
+      const Ptr<const TcpSocketBase> skt)
+{
+    auto it = ctx2rtxInfo.find(context);
+    if (it == ctx2rtxInfo.end())
+        return;
+
+    SequenceNumber32 currSeqno = hdr.GetSequenceNumber();
+
+    if (currSeqno <= (*it).second.first)
+    {
+        (*it).second.second++;
+    }
+    else
+    {
+        (*it).second.first = currSeqno;
+    }
+}
+
+void
+writeTcpRtx(FILE* fp, std::string nsString)
+{
+    auto it = ctx2rtxInfo.find(nsString);
+    if (it == ctx2rtxInfo.end())
+        return;
+
+    fprintf(fp, "%f %d\n", Simulator::Now().GetSeconds(), (*it).second.second);
+    fflush(fp);
+    fsync(fileno(fp));
+
+    Simulator::Schedule(rtxPeriod, &writeTcpRtx, fp, nsString);
+}
+
+void
+startTcpRtx(uint32_t nodeId, std::string fileName)
+{
+    std::string nsString =
+        "/NodeList/" + std::to_string(nodeId) + "/$ns3::TcpL4Protocol/SocketList/1/Rx";
+
+    auto fileIt = rtxStream.find(nsString);
+    if (fileIt == rtxStream.end())
+        rtxStream[nsString] = fopen(fileName.c_str(), "w");
+
+    auto seqnoIt = ctx2rtxInfo.find(nsString);
+    if (seqnoIt == ctx2rtxInfo.end())
+    {
+        SequenceNumber32 prevSeqno(0);
+        ctx2rtxInfo[nsString] = std::make_pair(prevSeqno, 0);
+    }
+
+    Config::Connect(nsString, MakeCallback(&tcpRx));
+    Simulator::Schedule(rtxPeriod, &writeTcpRtx, rtxStream[nsString], nsString);
 }
 
 int
@@ -318,7 +379,6 @@ main(int argc, char* argv[])
     bool generateRandom = false;
     bool alternate = false;
     uint32_t maxBytes = 15000000;
-
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
@@ -486,7 +546,7 @@ main(int argc, char* argv[])
     c1Interfaces.Add(link.Get(1));
 
     link = csmaBackup.Install(NodeContainer(e1, c2));
-    e1Interfaces.Add(link.Get(0)); 
+    e1Interfaces.Add(link.Get(0));
     c2Interfaces.Add(link.Get(1));
 
     link = csma.Install(NodeContainer(c1, e2));
@@ -738,6 +798,9 @@ main(int argc, char* argv[])
     forwardHelper.Install(c1, c1Interfaces);
     forwardHelper.Install(c2, c2Interfaces);
 
+    std::string rtxPath = getPath(resultsPath, "retransmissions");
+    std::filesystem::create_directories(rtxPath);
+
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
     uint16_t activePort = 20000;
@@ -756,6 +819,12 @@ main(int argc, char* argv[])
                                  maxBytes);
         activeSenderApp.Start(Seconds(1.0));
         // activeSenderApp.Stop(Seconds(flowEndTime));
+
+        Simulator::Schedule(Seconds(1.1),
+                            &startTcpRtx,
+                            activeReceivers.Get(0)->GetId(),
+                            getPath(rtxPath, "active-rtx.data"));
+
         if (!alternate)
         {
             for (uint32_t i = 1; i < activeFlows; i++)
@@ -783,19 +852,19 @@ main(int argc, char* argv[])
                 bool isMoreThanHalf = ((i + 1) / (float)activeFlows) >= 0.5;
 
                 ApplicationContainer activeReceiverApp =
-                createSinkUdpApplication(activePort + i, activeReceivers.Get(i));
+                    createSinkUdpApplication(activePort + i, activeReceivers.Get(i));
                 activeReceiverApp.Start(Seconds(0.0));
                 activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
                 ApplicationContainer activeSenderApp = createUdpApplication(
-                activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
-                activePort + i,
-                activeSenders.Get(i),
-                activeRateUdp,
-                !isMoreThanHalf ? 2.0 : 6.0,
-                !isMoreThanHalf ? 4.0 : 8.0,
-                0,
-                false);
+                    activeReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress(),
+                    activePort + i,
+                    activeSenders.Get(i),
+                    activeRateUdp,
+                    !isMoreThanHalf ? 2.0 : 6.0,
+                    !isMoreThanHalf ? 4.0 : 8.0,
+                    0,
+                    false);
             }
         }
     }
@@ -817,6 +886,11 @@ main(int argc, char* argv[])
                                  maxBytes);
         backupSenderApp.Start(Seconds(1.0));
         // backupSenderApp.Stop(Seconds(flowEndTime));
+
+        Simulator::Schedule(Seconds(1.1),
+                            &startTcpRtx,
+                            backupReceivers.Get(0)->GetId(),
+                            getPath(rtxPath, "backup-rtx.data"));
         if (!alternate)
         {
             for (uint32_t i = 1; i < backupFlows; i++)
@@ -877,6 +951,14 @@ main(int argc, char* argv[])
                 createTcpApplication(dstAddr, llPort + i, llSenders.Get(i), llRate, maxBytes);
             llSenderApp.Start(Seconds(1.0));
             // llSenderApp.Stop(Seconds(flowEndTime));
+        }
+
+        for (uint32_t i = 0; i < llFlows; i++)
+        {
+            Simulator::Schedule(Seconds(1.1),
+                                &startTcpRtx,
+                                llReceivers.Get(i)->GetId(),
+                                getPath(rtxPath, "ll-rtx.data"));
         }
     }
 
@@ -986,6 +1068,11 @@ main(int argc, char* argv[])
 
     /* Delete resources */
     for (auto item : tpStream)
+    {
+        fclose(item.second);
+    }
+
+    for (auto item : rtxStream)
     {
         fclose(item.second);
     }
