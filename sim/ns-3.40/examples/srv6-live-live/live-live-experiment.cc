@@ -440,11 +440,11 @@ main(int argc, char* argv[])
 
     NS_LOG_INFO("Configuring Congestion Control.");
     // Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
-    // Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
-    // Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
-    // Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
-    // Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(4));
-    // Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
+    Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(2 << 17));
+    Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(2 << 17));
+    Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
+    Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
+    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
     // Config::SetDefault("ns3::FifoQueueDisc::MaxSize", QueueSizeValue(QueueSize("100p")));
 
     std::filesystem::create_directories(resultsPath);
@@ -865,7 +865,7 @@ main(int argc, char* argv[])
                     activeSenders.Get(i),
                     activeRateUdp,
                     !isMoreThanHalf ? 2.0 : 6.0,
-                    !isMoreThanHalf ? 3.9 : 7.9,
+                    !isMoreThanHalf ? 3.99 : 7.99,
                     0,
                     false);
             }
@@ -932,7 +932,7 @@ main(int argc, char* argv[])
                     backupSenders.Get(i),
                     backupRateUdp,
                     !isMoreThanHalf ? 4.0 : 8.0,
-                    !isMoreThanHalf ? 5.9 : 9.9,
+                    !isMoreThanHalf ? 5.99 : 9.99,
                     0,
                     generateRandom);
             }

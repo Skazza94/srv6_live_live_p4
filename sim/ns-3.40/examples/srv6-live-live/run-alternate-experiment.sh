@@ -7,18 +7,18 @@ ll_rate="10Mbps"
 active_rate_tcp="10Mbps"
 backup_rate_tcp="10Mbps"
 maxBytes=12500000
-active_rate_udp="1Mbps"
-backup_rate_udp="1Mbps"
+active_rate_udp="2Mbps"
+backup_rate_udp="2Mbps"
 active_delay="5us"
 backup_delay="5us"
-congestion_control="TcpLinuxReno"
+congestion_control="TcpCubic"
 ll_flows=1
-active_flows=191
-backup_flows=191
-default_buffer="10000p"
-active_buffer="10000p"
-backup_buffer="10000p"
-seed=23
+active_flows=201
+backup_flows=201
+default_buffer="5000p"
+active_buffer="5000p"
+backup_buffer="5000p"
+seed=4555
 flow_end=13
 end=40
 dump=""
@@ -40,3 +40,5 @@ mkdir -p results/$result_path
 
 python3 flowmon_parser.py results/$result_path/flow-monitor/flow_monitor.xml
 python3 plot.py results/$result_path/ figures/$result_path
+chmod 777 -R results
+chmod 777 -R figures
