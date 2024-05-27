@@ -247,8 +247,8 @@ def get_flow_results(sim):
             'src_port': t.sourcePort,
             'dst_port': t.destinationPort,
             'protocol': t.protocol, 
-            'tx_bit_rate': flow.txBitrate*1e-3, 
-            'rx_bit_rate': flow.rxBitrate*1e-3,
+            'tx_bit_rate': flow.txBitrate*1e-3 if flow.txBitrate else 0, 
+            'rx_bit_rate': flow.rxBitrate*1e-3 if flow.rxBitrate else 0,
             'mean_delay': flow.delayMean*1e3,
             "packet_loss_ratio": flow.packetLossRatio*100,
             'fct': flow.fct

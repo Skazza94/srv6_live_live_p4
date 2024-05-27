@@ -35,6 +35,8 @@ def parse_data_file(file_path):
 
     for line in lines:
         line = line.strip().split(" ")
+        if float(line[0]) > 12:
+            continue
         parsed_result['x'].append(float(line[0]))
         parsed_result['y'].append(float(line[1]))
 
@@ -72,6 +74,43 @@ def plot_cwnd_figure(results):
     )
 
 
+def plot_tcp_retransmission_figure(results):
+    cwnd_results_path = os.path.join(results, "retransmissions")
+
+    def plot_retransmissions_line(node_type, color, marker, label, linestyle, end_x=None):
+        for file_name in sorted(os.listdir(cwnd_results_path)):
+            if node_type not in file_name:
+                continue
+            to_plot = parse_data_file(os.path.join(cwnd_results_path, file_name))
+
+            
+            to_plot["x"].insert(0, 1)
+            to_plot["y"].insert(0, 0)
+            to_plot["x"].append(12)
+            to_plot["y"].append(to_plot["y"][-1])
+
+            plt.plot(to_plot['x'], to_plot['y'], label=label,
+                     linestyle=linestyle, fillstyle='none', color=color, marker=marker)
+            return to_plot['x']
+
+    plt.clf()
+    plt.grid(linestyle='--', linewidth=0.5)
+    x_values = plot_retransmissions_line("ll", 'red', None, "Live-Live Flow", "solid")
+    plot_retransmissions_line("active", 'green', None, "TCP Flow (Path 1)", "dashed")
+    plot_retransmissions_line("backup", 'blue', None, "TCP Flow (Path 2)", "dotted")
+
+    plt.xlabel('Time [s]')
+    plt.xticks(range(0, 13))
+    plt.xlim([0, 13])
+
+    plt.ylabel('N. TCP Retransmissions')
+    plt.yticks(range(0, 70, 10))
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
+    experiment_name = "-".join(results.split("/")[-7:])
+    plt.savefig(
+        os.path.join(figures_path, f"retransmissions_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
+    )
+
 def plot_throughput_figure(results):
     def closest(sorted_dict, key):
         assert len(sorted_dict) > 0
@@ -81,7 +120,7 @@ def plot_throughput_figure(results):
 
     cwnd_results_path = os.path.join(results, "throughput")
 
-    def plot_throughput_line(node_type, color, marker, label):
+    def plot_throughput_line(node_type, color, marker, label, linestyle):
         for file_name in os.listdir(cwnd_results_path):
             if node_type not in file_name:
                 continue
@@ -92,7 +131,7 @@ def plot_throughput_figure(results):
             to_plot_y = to_plot['y'][:len(to_plot_x)]
 
             plt.plot(to_plot_x, [y / 1000000 for y in to_plot_y], label=label,
-                     linestyle="dashed", fillstyle='none', color=color, marker=marker)
+                     linestyle=linestyle, fillstyle='none', color=color, marker=marker)
 
             break
 
@@ -130,9 +169,9 @@ def plot_throughput_figure(results):
     plt.clf()
     plt.grid(linestyle='--', linewidth=0.5)
 
-    plot_throughput_line("ll", 'red', None, "Live-Live Flow")
-    plot_throughput_line("active-fg", 'green', None, "TCP Flow (Path 1)")
-    plot_throughput_line("backup-fg", 'blue', None, "TCP Flow (Path 2)")
+    plot_throughput_line("ll", 'red', None, "Live-Live Flow", "solid")
+    plot_throughput_line("active-fg", 'green', None, "TCP Flow (Path 1)", "dashed")
+    plot_throughput_line("backup-fg", 'blue', None, "TCP Flow (Path 2)", "dashed")
 
     plt.xticks(range(0, 13))
     plt.xlim([0, 13])
@@ -209,9 +248,9 @@ def plot_delay_histogram_figure(results, addresses):
                     to_plot, label=label,
                     fill=None, hatch=hatch, edgecolor=color,
                     rwidth=0.8,
-                    bins=range(0, 520, 20)
+                    bins=range(0, 1240, 40)
                 )
-                axes.set_xlim([0, 510])
+                axes.set_xlim([0, 1240])
                 axes.set_ylim([0.1, 100000])
                 axes.set_ylabel('N. Packets')
                 axes.set_yscale("log")
@@ -286,6 +325,7 @@ if __name__ == '__main__':
 
     plot_seqn_figure(results_path)
     plot_cwnd_figure(results_path)
+    plot_tcp_retransmission_figure(results_path)
     plot_throughput_figure(results_path)
 
     plot_fct_histogram_figure(
@@ -297,3 +337,4 @@ if __name__ == '__main__':
         results_path,
         [("2001::1", "Live-Live Flow", "red", "////"), ("2003::1", "TCP Flow (Path 1)", "green", "\\\\\\\\"),
          ("2005::1", "TCP Flow (Path 2)", "blue", "xxxx")])
+    

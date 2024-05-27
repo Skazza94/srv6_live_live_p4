@@ -84,14 +84,20 @@ createTcpApplication(Ipv6Address addressToReach,
                      uint16_t port,
                      Ptr<Node> node,
                      std::string dataRate,
-                     uint32_t maxBytes)
-{
+                     uint32_t maxBytes, 
+                     std::string congestionControl)
+{   
+
+    TypeId congestionControlTid = TypeId::LookupByName (congestionControl);
+
+    Config::Set ("/NodeList/" +  std::to_string(node->GetId()) + "/$ns3::TcpL4Protocol/SocketType", TypeIdValue (congestionControlTid));
+
     OnOffHelper source("ns3::TcpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
     source.SetConstantRate(DataRate(dataRate), 1400);
     // source.SetAttribute("DataRate", StringValue(dataRate));
     source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
     // source.SetAttribute("SendSize", UintegerValue(1400));
-
+    
     return source.Install(node);
 }
 
@@ -310,25 +316,14 @@ tcpRx(std::string context,
     if (currSeqno <= (*it).second.first)
     {
         (*it).second.second++;
+        fprintf(rtxStream[context], "%f %d\n", Simulator::Now().GetSeconds(), (*it).second.second);
+        fflush(rtxStream[context]);
+        fsync(fileno(rtxStream[context]));
     }
     else
     {
         (*it).second.first = currSeqno;
     }
-}
-
-void
-writeTcpRtx(FILE* fp, std::string nsString)
-{
-    auto it = ctx2rtxInfo.find(nsString);
-    if (it == ctx2rtxInfo.end())
-        return;
-
-    fprintf(fp, "%f %d\n", Simulator::Now().GetSeconds(), (*it).second.second);
-    fflush(fp);
-    fsync(fileno(fp));
-
-    Simulator::Schedule(rtxPeriod, &writeTcpRtx, fp, nsString);
 }
 
 void
@@ -349,7 +344,6 @@ startTcpRtx(uint32_t nodeId, std::string fileName)
     }
 
     Config::Connect(nsString, MakeCallback(&tcpRx));
-    Simulator::Schedule(rtxPeriod, &writeTcpRtx, rtxStream[nsString], nsString);
 }
 
 int
@@ -445,7 +439,13 @@ main(int argc, char* argv[])
     NS_LOG_INFO("End Time: " + std::to_string(endTime));
 
     NS_LOG_INFO("Configuring Congestion Control.");
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
+    // Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
+    // Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
+    // Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
+    // Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
+    // Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(4));
+    // Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
+    // Config::SetDefault("ns3::FifoQueueDisc::MaxSize", QueueSizeValue(QueueSize("100p")));
 
     std::filesystem::create_directories(resultsPath);
 
@@ -804,6 +804,7 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
     uint16_t activePort = 20000;
+
     if (activeFlows > 0)
     {
         ApplicationContainer activeReceiverApp =
@@ -816,7 +817,8 @@ main(int argc, char* argv[])
                                  activePort,
                                  activeSenders.Get(0),
                                  activeRateTcp,
-                                 maxBytes);
+                                 maxBytes,
+                                 "ns3::TcpCubic");
         activeSenderApp.Start(Seconds(1.0));
         // activeSenderApp.Stop(Seconds(flowEndTime));
 
@@ -824,6 +826,7 @@ main(int argc, char* argv[])
                             &startTcpRtx,
                             activeReceivers.Get(0)->GetId(),
                             getPath(rtxPath, "active-rtx.data"));
+
 
         if (!alternate)
         {
@@ -862,7 +865,7 @@ main(int argc, char* argv[])
                     activeSenders.Get(i),
                     activeRateUdp,
                     !isMoreThanHalf ? 2.0 : 6.0,
-                    !isMoreThanHalf ? 4.0 : 8.0,
+                    !isMoreThanHalf ? 3.9 : 7.9,
                     0,
                     false);
             }
@@ -883,7 +886,8 @@ main(int argc, char* argv[])
                                  backupPort,
                                  backupSenders.Get(0),
                                  backupRateTcp,
-                                 maxBytes);
+                                 maxBytes,
+                                 "ns3::TcpCubic");
         backupSenderApp.Start(Seconds(1.0));
         // backupSenderApp.Stop(Seconds(flowEndTime));
 
@@ -928,13 +932,13 @@ main(int argc, char* argv[])
                     backupSenders.Get(i),
                     backupRateUdp,
                     !isMoreThanHalf ? 4.0 : 8.0,
-                    !isMoreThanHalf ? 6.0 : 10.0,
+                    !isMoreThanHalf ? 5.9 : 9.9,
                     0,
                     generateRandom);
             }
         }
     }
-
+    
     uint16_t llPort = 40000;
     if (llFlows > 0)
     {
@@ -948,7 +952,7 @@ main(int argc, char* argv[])
             Ipv6Address srcAddr = llSenderIpv6Interfaces[i]->GetAddress(2).GetAddress();
             Ipv6Address dstAddr = llReceiverIpv6Interfaces[i]->GetAddress(2).GetAddress();
             ApplicationContainer llSenderApp =
-                createTcpApplication(dstAddr, llPort + i, llSenders.Get(i), llRate, maxBytes);
+                createTcpApplication(dstAddr, llPort + i, llSenders.Get(i), llRate, maxBytes, "ns3::" + congestionControl);
             llSenderApp.Start(Seconds(1.0));
             // llSenderApp.Stop(Seconds(flowEndTime));
         }
