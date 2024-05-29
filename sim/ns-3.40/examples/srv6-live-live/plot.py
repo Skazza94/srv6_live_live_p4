@@ -35,8 +35,10 @@ def parse_data_file(file_path):
 
     for line in lines:
         line = line.strip().split(" ")
-        if float(line[0]) > 12:
-            continue
+        # if float(line[0]) > 12:
+        #     continue
+        if parsed_result['x'] and float(line[0]) - parsed_result['x'][-1] < 0.1:
+            continue 
         parsed_result['x'].append(float(line[0]))
         parsed_result['y'].append(float(line[1]))
 
@@ -46,28 +48,27 @@ def parse_data_file(file_path):
 def plot_cwnd_figure(results):
     cwnd_results_path = os.path.join(results, "cwnd")
 
-    def plot_cwnd_line(node_type, color, marker, label, end_x=None):
+    def plot_cwnd_line(node_type, color, marker, label):
         for file_name in sorted(os.listdir(cwnd_results_path)):
             if node_type not in file_name:
                 continue
             to_plot = parse_data_file(os.path.join(cwnd_results_path, file_name))
+            to_plot["y"] = [val/1000 for val in to_plot["y"]] 
 
-            if end_x:
-                to_plot['x'].append(end_x)
-                to_plot['y'].append(to_plot['y'][-1])
-
-            plt.plot(to_plot['x'], to_plot['y'], label=file_name.replace(".data", ""),
+            plt.plot(to_plot['x'], to_plot['y'], label=label,
                      linestyle="dashed", fillstyle='none', color=color, marker=marker)
             return to_plot['x']
 
     plt.clf()
-    x_values = plot_cwnd_line("ll", 'blue', None, "Live-Live")
-    plot_cwnd_line("active", 'red', None, "Active")
-    plot_cwnd_line("backup", 'green', None, "Backup")
+    plt.grid(linestyle='--', linewidth=0.5)
+    x_values = plot_cwnd_line("ll", 'blue', None, "Live-Live Flow")
+    plot_cwnd_line("active", 'red', None, "TCP Flow (Path 1)")
+    plot_cwnd_line("backup", 'green', None, "TCP Flow (Path 2)")
 
-    plt.xlabel('Time (s)')
-    plt.ylabel('CWND Size')
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 8})
+    plt.xlabel('Time [s]')
+    plt.ylabel('CWnd Size [KB]')
+    plt.yticks(range(0, 12))
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
     experiment_name = "-".join(results.split("/")[-7:])
     plt.savefig(
         os.path.join(figures_path, f"cwnd_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
@@ -104,7 +105,7 @@ def plot_tcp_retransmission_figure(results):
     plt.xlim([0, 13])
 
     plt.ylabel('N. TCP Retransmissions')
-    plt.yticks(range(0, 70, 10))
+    plt.yticks(range(0, 200, 20))
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
     experiment_name = "-".join(results.split("/")[-7:])
     plt.savefig(
@@ -173,9 +174,9 @@ def plot_throughput_figure(results):
     plot_throughput_line("active-fg", 'green', None, "TCP Flow (Path 1)", "dashed")
     plot_throughput_line("backup-fg", 'blue', None, "TCP Flow (Path 2)", "dashed")
 
-    plt.xticks(range(0, 13))
-    plt.xlim([0, 13])
-    plt.ylim([0, 23])
+    # plt.xticks(range(0, 13))
+    # plt.xlim([0, 13])
+    plt.ylim([0, 80])
 
     plt.xlabel('Time [s]')
     plt.ylabel('Throughput [Mbps]')
@@ -248,9 +249,9 @@ def plot_delay_histogram_figure(results, addresses):
                     to_plot, label=label,
                     fill=None, hatch=hatch, edgecolor=color,
                     rwidth=0.8,
-                    bins=range(0, 1240, 40)
+                    bins=range(0, 125, 5)
                 )
-                axes.set_xlim([0, 1240])
+                axes.set_xlim([0, 125])
                 axes.set_ylim([0.1, 100000])
                 axes.set_ylabel('N. Packets')
                 axes.set_yscale("log")
@@ -300,6 +301,8 @@ def plot_fct_histogram_figure(results, addresses):
 
     plt.xticks([0, 1, 2], labels=[x[1] for x in addresses], size=6)
     plt.ylabel('FCT [ms]')
+    plt.yticks(range(0, 16, 2))
+
     experiment_name = "-".join(results.split("/")[-7:])
     plt.savefig(
         os.path.join(figures_path, f"fct_histogram_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
@@ -330,7 +333,7 @@ if __name__ == '__main__':
 
     plot_fct_histogram_figure(
         results_path,
-        [("2001::1", "Live-Live Flow", "red", "////"), ("2003::1", "TCP Flow (Path 1)", "green", "\\\\\\\\"),
+        [("2001::1", "Live-Live Flow", "red", "////"), ("2003::1", "TCP Flow 2 (Path 1)", "green", "\\\\\\\\"),
          ("2005::1", "TCP Flow (Path 2)", "blue", "xxxx")])
 
     plot_delay_histogram_figure(
