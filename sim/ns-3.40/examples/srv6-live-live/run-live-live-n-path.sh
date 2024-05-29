@@ -15,7 +15,7 @@ dump="--dump"
 n_paths=4
 test_type="live-live"
 
-result_path="$n_paths/$seed"
+result_path="n-paths/$test_type/$n_paths/$seed"
 
 mkdir -p results/$result_path
 ../../ns3 run "live-live-n-path --results-path=examples/srv6-live-live/results/$result_path --ll-flows=$ll_flows --default-bw=$default_bw --ll-rate=$ll_rate --path-bw=$path_bw --path-delay=$path_delay --max-bytes=$maxBytes --congestion-control=$congestion_control --default-buffer=$default_buffer --path-buffer=$path_buffer --end=$end --seed=$seed --n-paths=$n_paths --test-type=$test_type $dump" > results/$result_path/log.txt
