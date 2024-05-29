@@ -326,18 +326,18 @@ if __name__ == '__main__':
 
     plt.figure(figsize=(3.5, 2))
 
-    # plot_seqn_figure(results_path)
+    plot_seqn_figure(results_path)
     plot_cwnd_figure(results_path)
-    # plot_tcp_retransmission_figure(results_path)
+    plot_tcp_retransmission_figure(results_path)
     plot_throughput_figure(results_path)
 
-    # plot_fct_histogram_figure(
-    #     results_path,
-    #     [("2001::1", "Live-Live Flow", "red", "////"), ("2003::1", "TCP Flow 2 (Path 1)", "green", "\\\\\\\\"),
-    #      ("2005::1", "TCP Flow (Path 2)", "blue", "xxxx")])
+    plot_fct_histogram_figure(
+        results_path,
+        [("2001::1", "Live-Live Flow", "red", "////"), ("2003::1", "TCP Flow 2 (Path 1)", "green", "\\\\\\\\"),
+         ("2005::1", "TCP Flow (Path 2)", "blue", "xxxx")])
 
-    # plot_delay_histogram_figure(
-    #     results_path,
-    #     [("2001::1", "Live-Live Flow", "red", "////"), ("2003::1", "TCP Flow (Path 1)", "green", "\\\\\\\\"),
-    #      ("2005::1", "TCP Flow (Path 2)", "blue", "xxxx")])
+    plot_delay_histogram_figure(
+        results_path,
+        [("2001::1", "Live-Live Flow", "red", "////"), ("2003::1", "TCP Flow (Path 1)", "green", "\\\\\\\\"),
+         ("2005::1", "TCP Flow (Path 2)", "blue", "xxxx")])
     
