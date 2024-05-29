@@ -107,8 +107,8 @@ createUdpApplication(Ipv6Address addressToReach,
                      uint16_t port,
                      Ptr<Node> node,
                      std::string dataRate,
-                     uint32_t flowStartTime,
-                     uint32_t flowEndTime,
+                     float flowStartTime,
+                     float flowEndTime,
                      uint32_t maxBytes,
                      bool generateRandom)
 {
@@ -868,9 +868,8 @@ main(int argc, char* argv[])
                     activePort + i,
                     activeSenders.Get(i),
                     activeRateUdp,
-                    !isMoreThanHalf ? 2.0 : 4,0,
+                    !isMoreThanHalf ? 2.0 : 4.0,
                     !isMoreThanHalf ? 2.99 : 4.99,
-                    // !isMoreThanHalf ? 4.0 : 8.0,
                     0,
                     false);
             }
