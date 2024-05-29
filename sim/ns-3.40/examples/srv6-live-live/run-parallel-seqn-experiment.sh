@@ -40,3 +40,5 @@ mkdir -p results/$result_path
 
 python3 flowmon_parser.py results/$result_path/flow-monitor/flow_monitor.xml
 python3 plot.py results/$result_path/ figures/$result_path
+chmod 777 -R results
+chmod 777 -R figures
