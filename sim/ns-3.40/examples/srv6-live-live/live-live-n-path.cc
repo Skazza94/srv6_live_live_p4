@@ -548,7 +548,7 @@ main(int argc, char* argv[])
     {
         spreaderPortsCommand
             << "table_add check_live_live_enabled ipv6_encap_forward_random 2001::/64 => e1::2 "
-            << llFlows + 1 << " " << llFlows + 1 + nPaths << std::endl;
+            << llFlows + 1 << " " << llFlows + nPaths << std::endl;
 
         for (uint32_t i = 0; i < nPaths; ++i)
         {
