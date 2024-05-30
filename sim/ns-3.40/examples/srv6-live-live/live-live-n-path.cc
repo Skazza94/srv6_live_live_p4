@@ -631,7 +631,7 @@ main(int argc, char* argv[])
             << "table_add check_live_live_enabled ipv6_encap_forward_port 2002::/64 => e2::2 1"
             << std::endl;
 
-        despreaderPortsCommand << "table_add srv6_forward add_srv6_dest_segment 1 => e2::2"
+        despreaderPortsCommand << "table_add srv6_forward add_srv6_dest_segment 1 => e1::2"
                                << std::endl;
     }
 
