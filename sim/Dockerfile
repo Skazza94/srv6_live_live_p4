@@ -18,6 +18,8 @@ RUN apt clean && \
 
 RUN chmod +x /ns3/ns-3.40/src/p4-switch/helper/run_bmv2_CLI
 
+RUN python3 -m pip install matplotlib sortedcontainers --break-system-package
+
 ENV PATH="$PATH:/ns3/ns-3.40/src/p4-switch/helper"
 
 VOLUME /ns3/assets
