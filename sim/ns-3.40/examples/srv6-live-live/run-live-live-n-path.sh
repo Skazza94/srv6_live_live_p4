@@ -11,9 +11,9 @@ default_buffer="10000p"
 path_buffer="10000p"
 seed=1
 end=40
-dump="--dump"
-n_paths=2
-test_type="single"
+dump=""
+n_paths=4
+test_type="live-live"
 
 result_path="n-paths/$test_type/$n_paths/$seed"
 

@@ -88,8 +88,8 @@ createTcpApplication(Ipv6Address addressToReach,
     Config::Set("/NodeList/" + std::to_string(node->GetId()) + "/$ns3::TcpL4Protocol/SocketType",
                 TypeIdValue(congestionControlTid));
 
-    OnOffHelper source("ns3::TcpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
-    source.SetConstantRate(DataRate(dataRate), 1400);
+    BulkSendHelper source("ns3::TcpSocketFactory", Address(Inet6SocketAddress(addressToReach, port)));
+    // source.SetConstantRate(DataRate(dataRate), 1400);
     source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
 
     return source.Install(node);
@@ -285,7 +285,7 @@ void
 startTcpRtx(uint32_t nodeId, std::string fileName)
 {
     std::string nsString =
-        "/NodeList/" + std::to_string(nodeId) + "/$ns3::TcpL4Protocol/SocketList/1/Rx";
+        "/NodeList/" + std::to_string(nodeId) + "/$ns3::TcpL4Protocol/SocketList/*/Rx";
 
     auto fileIt = rtxStream.find(nsString);
     if (fileIt == rtxStream.end())
@@ -527,7 +527,7 @@ main(int argc, char* argv[])
             << std::endl;
         spreaderPortsCommand
             << "table_set_default check_live_live_enabled ipv6_encap_forward_random e1::2 "
-            << llFlows + 1 << " " << llFlows + 1 + nPaths << std::endl;
+            << llFlows + 1 << " " << llFlows + nPaths << std::endl;
         spreaderPortsCommand << "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55"
                              << std::endl;
         spreaderPortsCommand << "table_add srv6_function srv6_ll_deduplicate 85 => " << std::endl;
@@ -540,7 +540,7 @@ main(int argc, char* argv[])
             << std::endl;
         spreaderPortsCommand
             << "table_set_default check_live_live_enabled ipv6_encap_forward_random e1::2 "
-            << llFlows + 1 << " " << llFlows + 1 + nPaths << std::endl;
+            << llFlows + 1 << " " << llFlows + nPaths << std::endl;
         spreaderPortsCommand << "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e2::55"
                              << std::endl;
     }
@@ -597,7 +597,7 @@ main(int argc, char* argv[])
             << std::endl;
         despreaderPortsCommand
             << "table_set_default check_live_live_enabled ipv6_encap_forward_random e2::2 1 "
-            << 1 + nPaths << std::endl;
+            << nPaths << std::endl;
         despreaderPortsCommand << "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55"
                                << std::endl;
     }
@@ -609,7 +609,7 @@ main(int argc, char* argv[])
             << std::endl;
         despreaderPortsCommand
             << "table_set_default check_live_live_enabled ipv6_encap_forward_random e2::2 1 "
-            << 1 + nPaths << std::endl;
+            << nPaths << std::endl;
         despreaderPortsCommand << "table_add srv6_live_live_forward add_srv6_ll_segment 1 => e1::55"
                                << std::endl;
     }
@@ -617,7 +617,7 @@ main(int argc, char* argv[])
     {
         despreaderPortsCommand
             << "table_add check_live_live_enabled ipv6_encap_forward_random 2002::/64 => e2::2 1 "
-            << 1 + nPaths << std::endl;
+            << nPaths << std::endl;
 
         for (uint32_t i = 0; i < nPaths; ++i)
         {
